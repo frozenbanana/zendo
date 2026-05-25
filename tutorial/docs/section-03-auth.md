@@ -415,6 +415,9 @@ Install Fortify (this creates the auth routes and controllers):
 php artisan fortify:install
 ```
 
+!!! warning "Check for duplicate migrations"
+    If you run `fortify:install` more than once, it creates duplicate migration files (e.g., two `add_two_factor_columns_to_users_table` and two `create_passkeys_table` migrations). This causes "table already exists" and "duplicate column" errors. Run `ls database/migrations/*two_factor* database/migrations/*passkeys*` — if you see pairs of files with the same name but different timestamps, delete the earlier one from each pair.
+
 Update `app/Providers/FortifyServiceProvider.php` to wire up Blade views and redirect users to their tenant-specific dashboard after login:
 
 ```php
@@ -710,14 +713,17 @@ Add your Google OAuth credentials to `.env`:
 ```env
 GOOGLE_CLIENT_ID=your-client-id-here
 GOOGLE_CLIENT_SECRET=your-client-secret-here
-GOOGLE_REDIRECT=http://ivy.zendo.test:8000/auth/google/callback
+GOOGLE_REDIRECT=http://localhost:8000/auth/google/callback
 ```
 
 !!! note "Getting Google OAuth credentials"
     1. Go to [Google Cloud Console](https://console.cloud.google.com/)
     2. Create a project → APIs & Services → Credentials → OAuth 2.0 Client ID
-    3. Set authorized redirect URI to `http://ivy.zendo.test:8000/auth/google/callback`
+    3. Set authorized redirect URI to `http://localhost:8000/auth/google/callback`
     4. Copy the Client ID and Client Secret into `.env`
+
+!!! warning "Why localhost, not ivy.zendo.test?"
+    Google rejects `.test` redirect URIs because `.test` is not a public top-level domain — you'll get errors like *"Invalid Redirect: must end with a public top-level domain"*. Google explicitly allows `http://localhost` as a special case for local development. Use `localhost:8000` for OAuth flows during development, even though you use `ivy.zendo.test:8000` for everything else.
 
 Add the Google routes in `routes/web.php`:
 
@@ -746,20 +752,33 @@ Route::get('/auth/google/callback', function () {
 });
 ```
 
-Update your login view to include the Google button. In `resources/views/auth/login.blade.php`, add:
+Update your login view to include the Google button. In `resources/views/auth/login.blade.php`, add this CSS and HTML before the closing `</body>` tag:
 
-```html
-<div class="flex items-center justify-center mt-4">
-    <a href="{{ route('auth.google') }}"
-       class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-        <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.3v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.08z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-        Sign in with Google
-    </a>
-</div>
+```css
+.divider { text-align: center; margin: 1.5rem 0 0; position: relative; }
+.divider::before, .divider::after { content: ''; position: absolute; top: 50%; width: 40%; height: 1px; background: #d1d5db; }
+.divider::before { left: 0; }
+.divider::after { right: 0; }
+.divider span { background: white; padding: 0 0.5rem; color: #6b7280; font-size: 0.75rem; }
+.google-btn { display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; margin-top: 1.5rem; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; background: white; color: #374151; font-size: 0.875rem; font-weight: 500; text-decoration: none; cursor: pointer; }
+.google-btn:hover { background: #f9fafb; }
+.google-btn svg { width: 1.25rem; height: 1.25rem; }
 ```
 
+```html
+<div class="divider"><span>or</span></div>
+
+<a href="{{ route('auth.google') }}" class="google-btn">
+    <svg viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.3v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.08z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+    Sign in with Google
+</a>
+```
+
+!!! warning "Use plain CSS, not Tailwind"
+    The auth views use a `<style>` block, not Tailwind utility classes. Tailwind classes like `inline-flex` and `px-4` won't render without the Tailwind build step, so the button will look broken (no borders, padding, or layout). Use the `.google-btn` / `.divider` CSS classes shown above — they match the existing page styles.
+
 ??? tip "Multi-tenant OAuth redirect URLs"
-    In production, each tenant's domain needs its own Google redirect URL. The simplest approach is to use the hub domain (`zendo.com/auth/google/callback`) for all tenants, then redirect to the tenant-specific dashboard after authentication. For development, the single `.test` redirect works fine.
+    In production, each tenant's domain needs its own Google redirect URL. The simplest approach is to use the hub domain (`zendo.com/auth/google/callback`) for all tenants, then redirect to the tenant-specific dashboard after authentication. For development, use `localhost:8000` — Google won't accept `.test` domains as redirect URIs.
 
 ## Step 7: Create Authorization Policies
 
@@ -836,16 +855,35 @@ class EventPolicy
 }
 ```
 
-Register the policy in `app/Providers/AuthServiceProvider.php`:
+Register the policy in `app/Providers/AppServiceProvider.php`. Add the imports, the `$policies` property, and the `Gate::policy()` calls in `boot()`:
 
 ```php
 use App\Modules\Events\Models\Event;
 use App\Modules\Events\Policies\EventPolicy;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 
-protected $policies = [
-    Event::class => EventPolicy::class,
-];
+class AppServiceProvider extends ServiceProvider
+{
+    protected $policies = [
+        Event::class => EventPolicy::class,
+    ];
+
+    public function boot(): void
+    {
+        $this->configureDefaults();
+
+        foreach ($this->policies as $model => $policy) {
+            Gate::policy($model, $policy);
+        }
+    }
+
+    // ... existing configureDefaults() method
+}
 ```
+
+!!! warning "No AuthServiceProvider in Laravel 11+"
+    Older tutorials reference `AuthServiceProvider.php` with `$this->registerPolicies()` in `boot()`. That file no longer exists in Laravel 11+. Register policies directly in `AppServiceProvider.php` using `Gate::policy()` instead. Make sure you add `use Illuminate\Support\Facades\Gate;` and `use Illuminate\Support\Facades\Log;` to your imports at the top of the file — without these, PHP will look for `App\Providers\Gate` and throw a "Class not found" error.
 
 Create `app/Modules/Tenancy/Policies/TenantPolicy.php` for tenant management:
 
@@ -879,12 +917,14 @@ class TenantPolicy
 }
 ```
 
-Register it:
+Register it — add `TenantPolicy` to the `$policies` array and its import in `app/Providers/AppServiceProvider.php`:
 
 ```php
+// Add to imports at top of file:
 use App\Modules\Tenancy\Models\Tenant;
 use App\Modules\Tenancy\Policies\TenantPolicy;
 
+// Update the $policies property:
 protected $policies = [
     Event::class => EventPolicy::class,
     Tenant::class => TenantPolicy::class,
@@ -895,7 +935,7 @@ protected $policies = [
 
 The `Gate::before()` method is the skeleton key — it lets GLOBAL_ADMIN bypass every policy check. This is critical for platform operations like customer support.
 
-Edit `app/Providers/AuthServiceProvider.php`:
+Edit `app/Providers/AppServiceProvider.php` — the `Gate::before()` goes inside the existing `boot()` method:
 
 ```php
 use Illuminate\Support\Facades\Gate;
@@ -903,7 +943,11 @@ use Illuminate\Support\Facades\Log;
 
 public function boot(): void
 {
-    $this->registerPolicies();
+    $this->configureDefaults();
+
+    foreach ($this->policies as $model => $policy) {
+        Gate::policy($model, $policy);
+    }
 
     Gate::before(function ($user, $ability) {
         if ($user->isGlobalAdmin()) {
@@ -920,6 +964,9 @@ public function boot(): void
     });
 }
 ```
+
+!!! warning "tenant_id() must be null-safe"
+    The `tenant_id()` helper calls `app('current_tenant_id')`, which throws if no tenant is bound. Make sure `tenant_id()` includes the `app()->bound('current_tenant_id')` guard from [Section 2](section-02-multi-tenancy.md#step-6). Without it, tests and global contexts (like GLOBAL_ADMIN outside any tenant) will crash.
 
 ??? warning "Why log every GLOBAL_ADMIN bypass?"
     The skeleton key is powerful. Every time it's used should be auditable. If the GLOBAL_ADMIN bypass fires 500 times in an hour, something is wrong — either someone is using the super admin for routine work, or there's a bug in the role assignment logic.
@@ -1121,18 +1168,23 @@ All tests should pass:
 
 ## Step 10: Wire Up the Forgot Password Flow
 
-Fortify already handles password resets out of the box. Make sure your `.env` has mail configured:
+Fortify already handles password resets out of the box. Configure `.env` to use Mailpit (already running in Docker) instead of logging to a file:
 
 ```env
-MAIL_MAILER=log
+MAIL_MAILER=smtp
+MAIL_HOST=mailpit
+MAIL_PORT=1025
 MAIL_FROM_ADDRESS="noreply@zendo.test"
 MAIL_FROM_NAME="Zendo"
 ```
 
-!!! note "Mail setup for production"
-    In production, use a service like Resend, Postmark, or Amazon SES. The `log` driver writes emails to `storage/logs/laravel.log` — perfect for development.
+!!! note "Why Mailpit instead of the log driver?"
+    Mailpit is already in your `docker-compose.yml` — it's a fake SMTP server with a web UI at `http://localhost:8025`. Every email Laravel sends gets captured and displayed there, so you can click reset links and verify email content visually. Much nicer than digging through `storage/logs/laravel.log`.
 
-Test it: visit `/forgot-password`, enter an email, and check `storage/logs/laravel.log` for the reset link.
+!!! note "Mail setup for production"
+    In production, use a service like Resend, Postmark, or Amazon SES. Mailpit only accepts mail — it doesn't deliver it.
+
+Test it: visit `/forgot-password`, enter an email, then open `http://localhost:8025` to see the reset email in Mailpit's inbox.
 
 !!! success "Checkpoint"
     At this point you should have:

@@ -875,10 +875,17 @@ if (! function_exists('tenant')) {
 if (! function_exists('tenant_id')) {
     function tenant_id(): ?string
     {
+        if (! app()->bound('current_tenant_id')) {
+            return null;
+        }
+
         return app('current_tenant_id');
     }
 }
 ```
+
+!!! note "Why the `app()->bound()` check?"
+    The `tenant_id()` helper is called from policies, gates, and middleware — places where no tenant context may exist yet (e.g., a GLOBAL_ADMIN acting outside any tenant, or unit tests). Without this guard, `app('current_tenant_id')` throws a `ContainerException` when the binding is absent. Returning `null` instead makes the helper safe to call anywhere.
 
 Add it to `composer.json` autoloading:
 
