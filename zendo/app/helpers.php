@@ -12,6 +12,10 @@ if (! function_exists('tenant')) {
 if (! function_exists('tenant_id')) {
     function tenant_id(): ?string
     {
+        if (! app()->bound('current_tenant_id')) {
+            return null;
+        }
+
         return app('current_tenant_id');
     }
 }
