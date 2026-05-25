@@ -254,7 +254,7 @@ A modular monolith keeps code organized by domain, not by technical layer. Inste
 
 ```bash
 cd ~/Work/metaprovide/lotus/zendo
-mkdir -p app/Modules/Tenancy/{Models,Policies,Middleware,Events}
+mkdir -p app/Modules/Tenancy/{Models,Providers,Policies,Middleware,Events}
 mkdir -p app/Modules/Events/{Models,Policies,Controllers,Filament,Requests,Events}
 mkdir -p app/Modules/Registration/{Models,Policies,Controllers,Filament,Requests,Services,Events}
 mkdir -p app/Modules/Lodging/{Models,Policies,Filament,Services,Events}

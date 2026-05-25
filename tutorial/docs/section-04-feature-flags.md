@@ -14,7 +14,7 @@
 |---------|-----------|----------------|
 | Pennant | Laravel's feature flag package | Toggle features per-tenant, per-user, per-role |
 | Feature-driven architecture | Building UI conditionally on flags | Same codebase serves different center configurations |
-| Flag gates in policies | `Feature::active()` in authorization | Backend enforcement, not just UI hiding |
+| Flag gates in policies | `Feature::for($tenant)->active()` in authorization | Backend enforcement, not just UI hiding |
 | FeatureFlags value object | Typed wrapper around the JSON column | Clean access to feature state on the Tenant model |
 | Seeded feature matrix | Different features enabled per tenant | Realistic multi-tenant configuration |
 
@@ -27,14 +27,16 @@ Every retreat center operates differently. Ivy offers meals, lodging, and member
 **Feature flags** solve this. A feature flag is a boolean switch that says "is this feature turned on for this tenant?" When the flag is off, the feature disappears — from the UI, from the API, from the admin panel — but the code still exists. It's not deleted; it's hidden.
 
 ??? question "How is this different from just checking a database column?"
-    You *could* check `$tenant->features['meals']` everywhere, and in Section 1 we did exactly that on the hub page. But Pennant gives you four things a raw JSON column doesn't:
+    You *could* check `$tenant->features['meals']` everywhere, and in Section 1 we did exactly that on the hub page. But the `FeatureFlags` value object + Pennant give you four things a raw JSON column doesn't:
 
-    1. **A consistent API** — `Feature::active('meals', $tenant)` works everywhere: Blade, PHP, Policies, Filament
+    1. **Type safety** — `$tenant->featureFlags()->meals()` won't silently succeed on a typo like `$tenant->features['mealz']` would
     2. **Caching** — Pennant caches feature values in memory. No JSON decode on every request
     3. **Rich feature types** — Per-tenant (meals), per-role (can-issue-refunds), per-user (ai-navigator) — all from one system
-    4. **Blade directive** — The `@feature` directive keeps your templates clean
+    4. **Policy integration** — Use `$tenant->featureFlags()->meals()` directly for simple checks, or `Feature::for($tenant)->active('meals')` for Pennant's caching and scope resolution
 
-    Think of it this way: a JSON column is the raw ingredients. Pennant is the recipe that makes those ingredients usable.
+    For most cases, calling `$tenant->featureFlags()->meals()` directly is the simplest approach. Use `Feature::for($tenant)->active('meals')` when you need Pennant's caching across multiple checks in the same request.
+
+    Think of it this way: a JSON column is the raw ingredients. The `FeatureFlags` value object is the clean API. Pennant is the caching layer on top.
 
 ??? question "What's the restaurant menu analogy?"
     Feature flags are like **restaurant menu sections**. A steakhouse doesn't show the vegetarian menu section — but the kitchen (code) still knows how to cook vegetarian food. Similarly, `meals` being off for Nalanda doesn't delete the Meals module — it just hides it from their menu.
@@ -49,8 +51,8 @@ graph TD
     B --> C[Pennant registration]
     C --> D{Feature flag check}
 
-    D -->|Blade| E["@feature directive<br/>Show/hide UI blocks"]
-    D -->|Policy| F["Feature::active()<br/>Allow/deny actions"]
+    D -->|Blade| E["featureFlags() method<br/>Show/hide UI blocks"]
+    D -->|Policy| F["featureFlags()->meals()<br/>Allow/deny actions"]
     D -->|Filament| G["canAccess() check<br/>Show/hide resources"]
     D -->|API| H["Route model binding<br/>Return 404 if inactive"]
 
@@ -302,22 +304,31 @@ Register the provider in `bootstrap/providers.php`:
 return [
     App\Providers\AppServiceProvider::class,
     App\Modules\Tenancy\Providers\FeatureServiceProvider::class,
+    App\Providers\FortifyServiceProvider::class,
 ];
 ```
 
-??? tip "How Pennant resolves features"
-    When you call `Feature::active('meals', $tenant)`, Pennant:
+??? tip "Two ways to check feature flags"
+    There are two complementary ways to check feature flags:
 
-    1. Checks the `features` database table cache first
-    2. If no cached value, calls the definition closure: `fn (Tenant $tenant) => $tenant->featureFlags()->has('meals')`
-    3. The closure reads from our `FeatureFlags` value object, which reads from the `features` JSON column
-    4. Pennant caches the result so subsequent checks in the same request don't hit the database again
+    **Direct access** (simpler, preferred for most cases):
+    ```php
+    $tenant->featureFlags()->meals()  // true or false
+    ```
+    This reads from the `FeatureFlags` value object, which is already parsed from the JSON column. No Pennant involved.
 
-    This means the `features` JSON column on `tenants` is the **source of truth**, and Pennant provides the **interface** for checking it.
+    **Pennant access** (when you need caching across multiple checks):
+    ```php
+    Feature::for($tenant)->active('meals')  // true or false
+    ```
+    Pennant caches the result in memory for the duration of the request. Use this when you're checking the same flag many times in one request (e.g., in middleware that runs before every controller).
+
+    ??? warning "Important: use Feature::for() to scope"
+        The API `Feature::active('meals', $tenant)` **ignores the second argument** in Pennant v1. The second parameter is not a scope — it's compared as a value. Always use `Feature::for($tenant)->active('meals')` to scope feature checks to a tenant.
 
 ## Step 5: Use Feature Flags in Blade
 
-The Blade `@feature` directive is the cleanest way to conditionally render UI. Let's update the hub page to use it.
+Since the `Tenant` model already casts its `features` column to a `FeatureFlags` value object, we can check flags directly on the model — no Pennant facade needed in Blade. This is simpler and more readable.
 
 First, make sure the current tenant is available in views. The tenant middleware we built in Section 2 should already set this up. Add a view composer in `app/Providers/AppServiceProvider.php`:
 
@@ -327,13 +338,15 @@ use App\Modules\Tenancy\Models\Tenant;
 
 public function boot(): void
 {
+    // ... existing code: $this->configureDefaults(), Gate policies, Gate::before(), etc.
+
     View::composer('*', function ($view) {
         $view->with('currentTenant', tenant());
     });
 }
 ```
 
-Now update `resources/views/hub.blade.php` to use `@feature`:
+Now update `resources/views/hub.blade.php` to use `featureFlags()`:
 
 ```html
 @foreach($centers as $center)
@@ -341,23 +354,24 @@ Now update `resources/views/hub.blade.php` to use `@feature`:
         <h2>{{ $center->name }}</h2>
         <p>{{ $center->description }}</p>
         <div class="features">
-            @feature('meals', $center)
+            @php($flags = $center->featureFlags())
+            @if($flags->meals())
                 <span class="badge active">meals</span>
             @else
                 <span class="badge inactive">meals</span>
-            @endfeature
+            @endif
 
-            @feature('lodging', $center)
+            @if($flags->lodging())
                 <span class="badge active">lodging</span>
             @else
                 <span class="badge inactive">lodging</span>
-            @endfeature
+            @endif
 
-            @feature('memberships', $center)
+            @if($flags->memberships())
                 <span class="badge active">memberships</span>
             @else
                 <span class="badge inactive">memberships</span>
-            @endfeature
+            @endif
         </div>
     </div>
 @endforeach
@@ -378,10 +392,8 @@ Create `app/Modules/Meals/Policies/MealPolicy.php`:
 namespace App\Modules\Meals\Policies;
 
 use App\Modules\People\Models\User;
-use App\Modules\Tenancy\Models\Tenant;
 use Illuminate\Auth\Access\HandlesRequests;
 use Illuminate\Auth\Access\Response;
-use Laravel\Pennant\Feature;
 
 class MealPolicy
 {
@@ -389,7 +401,7 @@ class MealPolicy
 
     public function before(User $user, string $ability): ?Response
     {
-        if (! Feature::active('meals', $user->tenant)) {
+        if (! $user->tenant->featureFlags()->meals()) {
             return Response::denyAsNotFound('Meals are not available for this center.');
         }
 
@@ -449,14 +461,21 @@ Here's the full feature flag matrix we're building:
 In the next section, we'll build the Filament admin panel. But let's preview how feature flags gate resources. In `app/Modules/Meals/Filament/MealPlanResource.php`:
 
 ```php
-use Laravel\Pennant\Feature;
+<?php
+
+namespace App\Modules\Meals\Filament;
+
 use Filament\Facades\Filament;
+use Filament\Resources\Resource;
 
-public static function canAccess(): bool
+class MealPlanResource extends Resource
 {
-    $tenant = Filament::getTenant();
+    public static function canAccess(): bool
+    {
+        $tenant = Filament::getTenant();
 
-    return Feature::active('meals', $tenant);
+        return $tenant->featureFlags()->meals();
+    }
 }
 ```
 
@@ -464,18 +483,20 @@ When `canAccess()` returns `false`, Filament completely hides the resource from 
 
 ## Step 8: Use Feature Flags in API Endpoints
 
-For the public API, feature flags control whether an endpoint even exists. In `routes/api.php`:
+!!! note
+    You don't have a `routes/api.php` yet — that's fine. This step shows the pattern you'll use when you build the API in a later section. Just read through it to understand the approach; you'll implement it when the API routes exist.
+
+For the public API, feature flags control whether an endpoint even exists. In `routes/api.php` (to be created later):
 
 ```php
 use Illuminate\Support\Facades\Route;
-use Laravel\Pennant\Feature;
 
 Route::middleware(['tenant.resolve'])->group(function () {
     Route::prefix('api')->group(function () {
         Route::get('/events', [EventController::class, 'index']);
 
         Route::middleware(function ($request, $next) {
-            if (! Feature::active('meals', tenant())) {
+            if (! tenant()->featureFlags()->meals()) {
                 abort(404);
             }
             return $next($request);
@@ -485,7 +506,7 @@ Route::middleware(['tenant.resolve'])->group(function () {
         });
 
         Route::middleware(function ($request, $next) {
-            if (! Feature::active('lodging', tenant())) {
+            if (! tenant()->featureFlags()->lodging()) {
                 abort(404);
             }
             return $next($request);
@@ -495,7 +516,7 @@ Route::middleware(['tenant.resolve'])->group(function () {
         });
 
         Route::middleware(function ($request, $next) {
-            if (! Feature::active('memberships', tenant())) {
+            if (! tenant()->featureFlags()->memberships()) {
                 abort(404);
             }
             return $next($request);
@@ -592,7 +613,7 @@ Tenant::where('slug', 'bodhi-tree')->first()->featureFlags()->lodging();
 
 ## Step 10: Verify the Feature Flag Decision Flow
 
-Let's trace what happens when different tenants interact with the system:
+Let's trace what happens when different tenants interact with the system.
 
 ```mermaid
 graph LR
@@ -620,28 +641,29 @@ graph LR
     end
 ```
 
-Let's test the API middleware:
+First, verify the FeatureFlags value object works:
 
 ```bash
-# Reset the feature cache
-php artisan pennant:purge
-
-# Test as Ivy — meals should work
-curl -H "Host: ivy.zendo.test" http://localhost:8000/api/meals
-# => 200, list of meal plans
-
-# Test as Nalanda — meals should 404
-curl -H "Host: nalanda.zendo.test" http://localhost:8000/api/meals
-# => 404 Not Found
-
-# Test as Nalanda — lodging should work
-curl -H "Host: nalanda.zendo.test" http://localhost:8000/api/lodging
-# => 200, list of buildings
-
-# Test as Bodhi Tree — lodging should 404
-curl -H "Host: bodhi-tree.zendo.test" http://localhost:8000/api/lodging
-# => 404 Not Found
+php artisan tinker
 ```
+
+```php
+use App\Modules\Tenancy\Models\Tenant;
+Tenant::where('slug', 'ivy')->first()->featureFlags()->meals();
+// => true
+Tenant::where('slug', 'nalanda')->first()->featureFlags()->meals();
+// => false
+Tenant::where('slug', 'bodhi-tree')->first()->featureFlags()->lodging();
+// => false
+```
+
+Then visit the hub page in your browser. You should see:
+- **Ivy**: meals (green), lodging (green), memberships (green)
+- **Nalanda**: meals (grey), lodging (green), memberships (green)
+- **Bodhi Tree**: meals (green), lodging (grey), memberships (grey)
+
+??? info "What about the API tests?"
+    The curl tests for `/api/meals`, `/api/lodging`, etc. will be covered when we build the API routes in a later section. For now, we've verified the feature flags work at the model level and in Blade.
 
 ??? warning "Clear the Pennant cache after changing features"
     Pennant caches feature values. If you change a tenant's features directly in the database, you need to clear the cache:
@@ -659,12 +681,12 @@ curl -H "Host: bodhi-tree.zendo.test" http://localhost:8000/api/lodging
     - ✅ `FeatureFlags` value object with typed access to all flags
     - ✅ `FeatureFlagsCaster` on the `Tenant` model
     - ✅ `FeatureServiceProvider` registering all feature definitions
-    - ✅ `@feature` Blade directive working in views
-    - ✅ `Feature::active()` working in policies (with `denyAsNotFound`)
+    - ✅ `featureFlags()` method working in Blade views
+    - ✅ `featureFlags()` method working in policies (with `denyAsNotFound`)
     - ✅ `canAccess()` method on Filament resources
-    - ✅ API middleware returning 404 for inactive features
+    - ✅ API middleware pattern for returning 404 for inactive features (to be implemented)
     - ✅ Three tenants seeded with different feature configurations
-    - ✅ Verified that Nalanda gets 404 for meals, Bodhi Tree gets 404 for lodging
+    - ✅ Verified feature flags in tinker and on the hub page
 
 ---
 
