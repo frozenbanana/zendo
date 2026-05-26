@@ -24,13 +24,24 @@
             <h2>{{ $center->name }}</h2>
             <p>{{ $center->description }}</p>
             <div class="features">
-                @foreach(['meals', 'lodging', 'memberships'] as $feature)
-                    @if(isset($center->features[$feature]) && $center->features[$feature])
-                        <span class="badge active">{{ $feature }}</span>
-                    @else
-                        <span class="badge inactive">{{ $feature }}</span>
-                    @endif
-                @endforeach
+                @php($flags = $center->featureFlags())
+                @if($flags->meals())
+                    <span class="badge active">meals</span>
+                @else
+                    <span class="badge inactive">meals</span>
+                @endif
+
+                @if($flags->lodging())
+                    <span class="badge active">lodging</span>
+                @else
+                    <span class="badge inactive">lodging</span>
+                @endif
+
+                @if($flags->memberships())
+                    <span class="badge active">memberships</span>
+                @else
+                    <span class="badge inactive">memberships</span>
+                @endif
             </div>
         </div>
     @endforeach

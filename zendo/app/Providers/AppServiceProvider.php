@@ -13,6 +13,7 @@ use App\Modules\Tenancy\Models\Tenant;
 use App\Modules\Tenancy\Policies\TenantPolicy;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\View;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -53,6 +54,10 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return null;
+        });
+
+        View::composer('*', function ($view) {
+            $view->with('currentTenant', tenant());
         });
     }
 

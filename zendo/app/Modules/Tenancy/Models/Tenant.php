@@ -23,7 +23,12 @@ class Tenant extends Model
     ];
 
     protected $casts = [
-        'features' => 'array',
+        'features' => FeatureFlagsCaster::class,
         'is_active' => 'boolean',
     ];
+
+    public function featureFlags(): FeatureFlags
+    {
+        return $this->features;
+    }
 }
