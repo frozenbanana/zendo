@@ -4,11 +4,21 @@
 
 ```bash
 cd zendo
-docker compose up -d                    # Start PostgreSQL, Redis, Meilisearch
-php artisan migrate:refresh --seed       # Reset DB and seed demo data
-php artisan serve --host=0.0.0.0        # Start the app
-npm run dev                              # Start Vite (separate terminal)
+
+# Start only infrastructure (not the app — that runs locally)
+docker compose up -d postgres redis mailpit
+
+# Reset DB and seed demo data
+SCOUT_DRIVER=null php artisan migrate:refresh --seed
+
+# Start the Laravel dev server
+php artisan serve --host=0.0.0.0
+
+# Start Vite for frontend hot-reload (separate terminal)
+npm run dev
 ```
+
+> **Note:** Don't use `docker compose up -d` without specifying services — it tries to build the app/horizon/reverb/scheduler containers which need PHP 8.5. For local development, only postgres, redis, and mailpit need Docker. The app runs natively via `php artisan serve`.
 
 Then open http://ivy.zendo.test:8000 (add `127.0.0.1 ivy.zendo.test nalanda.zendo.test bodhi-tree.zendo.test` to `/etc/hosts` if you haven't already).
 
