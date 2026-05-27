@@ -4,6 +4,7 @@ namespace App\Modules\Events\Models;
 
 use App\Modules\Registration\Models\Registration;
 use App\Modules\Tenancy\Models\Concerns\HasTenantScope;
+use Database\Factories\EventFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,6 +18,11 @@ class Event extends Model
     use HasTenantScope;
     use HasUuids;
     use Searchable;
+
+    protected static function newFactory()
+    {
+        return EventFactory::new();
+    }
 
     protected $fillable = [
         'tenant_id',

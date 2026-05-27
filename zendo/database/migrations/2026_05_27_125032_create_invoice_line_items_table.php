@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('invoice_line_items', function (Blueprint $table) {
             $table->uuid('id')->primary();
+            $table->uuid('tenant_id');
             $table->uuid('invoice_id');
             $table->string('description');
             $table->integer('quantity')->default(1);
@@ -19,7 +20,9 @@ return new class extends Migration
             $table->nullableUuidMorphs('itemable');
             $table->timestamps();
 
+            $table->foreign('tenant_id')->references('id')->on('tenants')->cascadeOnDelete();
             $table->foreign('invoice_id')->references('id')->on('invoices')->cascadeOnDelete();
+            $table->index('tenant_id');
             $table->index('invoice_id');
         });
     }

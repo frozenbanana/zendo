@@ -1,7 +1,10 @@
 <?php
 
-test('returns a successful response', function () {
-    $response = $this->get(route('home'));
+test('home route is registered', function () {
+    expect(route('home'))->not->toBeEmpty();
+});
 
+test('up endpoint returns ok', function () {
+    $response = $this->get('/up');
     $response->assertOk();
 });

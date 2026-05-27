@@ -2,6 +2,7 @@
 
 namespace App\Modules\Payments\Http\Controllers;
 
+use App\Modules\Payments\Enums\WebhookProcessStatus;
 use App\Modules\Payments\Jobs\HandleStripeWebhook;
 use App\Modules\Payments\Models\StripeWebhook;
 use Illuminate\Http\JsonResponse;
@@ -44,7 +45,7 @@ class StripeWebhookController
             'stripe_event_id' => $stripeEventId,
             'type' => $event->type,
             'payload' => $event->toArray(),
-            'status' => 'PENDING',
+            'status' => WebhookProcessStatus::PENDING,
         ]);
 
         HandleStripeWebhook::dispatch($webhook->id);

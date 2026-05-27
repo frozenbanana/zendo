@@ -7,6 +7,7 @@ use App\Modules\Lodging\Models\Building;
 use App\Modules\Meals\Models\MealPlan;
 use App\Modules\Memberships\Models\MembershipPlan;
 use App\Modules\People\Models\User;
+use Database\Factories\TenantFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -18,6 +19,11 @@ class Tenant extends Model
     use HasFactory;
     use HasUuids;
     use Searchable;
+
+    protected static function newFactory()
+    {
+        return TenantFactory::new();
+    }
 
     protected $fillable = [
         'slug',

@@ -40,6 +40,11 @@ class Invoice extends Model
         return $this->hasOne(Payment::class);
     }
 
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
+    }
+
     public function registration(): BelongsTo
     {
         return $this->belongsTo(Registration::class);

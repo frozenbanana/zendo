@@ -2,6 +2,7 @@
 
 namespace App\Modules\Payments\Models;
 
+use App\Modules\Payments\Enums\RefundStatus;
 use App\Modules\Tenancy\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +24,7 @@ class Refund extends Model
     ];
 
     protected $casts = [
+        'status' => RefundStatus::class,
         'amount_cents' => 'integer',
     ];
 

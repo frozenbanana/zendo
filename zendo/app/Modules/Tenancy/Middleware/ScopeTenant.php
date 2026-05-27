@@ -2,10 +2,10 @@
 
 namespace App\Modules\Tenancy\Middleware;
 
+use App\Modules\Tenancy\Models\Tenant;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use App\Modules\Tenancy\Models\Tenant;
 
 class ScopeTenant
 {
@@ -13,11 +13,11 @@ class ScopeTenant
     {
         $tenant = $this->resolveTenant($request);
 
-        if ($tenant === null && !$request->is('hub') && !$request->is('hub/*')) {
-            abort(404, 'Tenant not found.');
+        if ($tenant === null && ! $this->isTenantlessRoute($request)) {
+            return $next($request);
         }
 
-        if ($tenant && !$tenant->is_active) {
+        if ($tenant && ! $tenant->is_active) {
             abort(403, 'This center is currently unavailable.');
         }
 
@@ -30,14 +30,16 @@ class ScopeTenant
 
     protected function resolveTenant(Request $request): ?Tenant
     {
-        // The hub page lists all centers — no tenant scoping
         if ($request->is('hub') || $request->is('hub/*')) {
+            return null;
+        }
+
+        if ($request->is('api/*') || $request->is('stripe/*') || $request->is('admin/*') || $request->is('zendo/*') || $request->is('health') || $request->is('up')) {
             return null;
         }
 
         $host = $request->getHost();
 
-        // Strategy 1: subdomain (ivy.zendo.test)
         $subdomain = $this->extractSubdomain($host);
         if ($subdomain) {
             $tenant = Tenant::where('slug', $subdomain)->first();
@@ -46,16 +48,16 @@ class ScopeTenant
             }
         }
 
-        // Strategy 2: custom domain (www.ivyretreat.com)
         $tenant = Tenant::where('custom_domain', $host)->first();
         if ($tenant) {
             return $tenant;
         }
 
-        // Strategy 3: session (for headless/API flows)
-        $tenantId = $request->session()->get('current_tenant_id');
-        if ($tenantId) {
-            return Tenant::find($tenantId);
+        if ($request->hasSession()) {
+            $tenantId = $request->session()->get('current_tenant_id');
+            if ($tenantId) {
+                return Tenant::find($tenantId);
+            }
         }
 
         return null;
@@ -67,16 +69,37 @@ class ScopeTenant
         if (count($parts) >= 3) {
             return $parts[0];
         }
+
         return null;
+    }
+
+    protected function isTenantlessRoute(Request $request): bool
+    {
+        return $request->is('hub')
+            || $request->is('hub/*')
+            || $request->is('api/*')
+            || $request->is('health')
+            || $request->is('up')
+            || $request->is('login')
+            || $request->is('register')
+            || $request->is('forgot-password')
+            || $request->is('reset-password/*')
+            || $request->is('stripe/*')
+            || $request->is('admin/*')
+            || $request->is('zendo')
+            || $request->is('zendo/*')
+            || $request->is('livewire/*')
+            || $request->is('horizon/*')
+            || $request->is('broadcasting/*');
     }
 
     protected function bindTenant(Tenant $tenant): void
     {
-        // Laravel app container — available as app('current_tenant_id')
         app()->instance('current_tenant_id', $tenant->id);
         app()->instance(Tenant::class, $tenant);
 
-        // PostgreSQL session — used by Row-Level Security (Section 13)
-        DB::statement("SET app.current_tenant_id = '{$tenant->id}'");
+        if (config('database.default') === 'pgsql') {
+            DB::statement("SET app.current_tenant_id = '{$tenant->id}'");
+        }
     }
 }

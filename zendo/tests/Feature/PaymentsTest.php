@@ -2,6 +2,8 @@
 
 use App\Modules\Payments\Enums\InvoiceStatus;
 use App\Modules\Payments\Enums\PaymentStatus;
+use App\Modules\Payments\Enums\RefundStatus;
+use App\Modules\Payments\Enums\WebhookProcessStatus;
 use App\Modules\Payments\Models\Invoice;
 use App\Modules\Payments\Models\InvoiceLineItem;
 use App\Modules\Payments\Models\Payment;
@@ -38,6 +40,7 @@ describe('Invoice', function () {
         ]);
 
         InvoiceLineItem::create([
+            'tenant_id' => $this->tenant->id,
             'invoice_id' => $invoice->id,
             'description' => 'Event Registration',
             'quantity' => 1,
@@ -135,7 +138,7 @@ describe('Refund', function () {
             'invoice_id' => $invoice->id,
             'amount_cents' => 5000,
             'reason' => 'Partial cancellation',
-            'status' => 'PENDING',
+            'status' => RefundStatus::PENDING,
         ]);
 
         expect($refund)->toBeInstanceOf(Refund::class);
@@ -150,7 +153,7 @@ describe('StripeWebhook', function () {
             'stripe_event_id' => 'evt_test_'.str()->random(12),
             'type' => 'checkout.session.completed',
             'payload' => ['data' => ['object' => ['id' => 'cs_test_123']]],
-            'status' => 'PENDING',
+            'status' => WebhookProcessStatus::PENDING,
         ]);
 
         expect($webhook)->toBeInstanceOf(StripeWebhook::class);

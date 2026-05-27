@@ -5,6 +5,10 @@ use App\Modules\Tenancy\Models\Tenant;
 if (! function_exists('tenant')) {
     function tenant(): ?Tenant
     {
+        if (! app()->bound(Tenant::class)) {
+            return null;
+        }
+
         return app(Tenant::class);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Modules\Payments\Jobs;
 
 use App\Modules\Payments\Enums\InvoiceStatus;
 use App\Modules\Payments\Enums\PaymentStatus;
+use App\Modules\Payments\Enums\WebhookProcessStatus;
 use App\Modules\Payments\Models\Invoice;
 use App\Modules\Payments\Models\Payment;
 use App\Modules\Payments\Models\StripeWebhook;
@@ -46,10 +47,10 @@ class HandleStripeWebhook implements ShouldQueue
                 default => Log::info("Unhandled Stripe event type: {$webhook->type}"),
             };
 
-            $webhook->update(['status' => 'PROCESSED']);
+            $webhook->update(['status' => WebhookProcessStatus::PROCESSED]);
         } catch (\Throwable $e) {
             $webhook->update([
-                'status' => 'FAILED',
+                'status' => WebhookProcessStatus::FAILED,
                 'error' => $e->getMessage(),
             ]);
 

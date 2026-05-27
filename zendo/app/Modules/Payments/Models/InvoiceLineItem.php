@@ -2,15 +2,18 @@
 
 namespace App\Modules\Payments\Models;
 
+use App\Modules\Tenancy\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class InvoiceLineItem extends Model
 {
+    use HasTenantScope;
     use HasUuids;
 
     protected $fillable = [
+        'tenant_id',
         'invoice_id',
         'description',
         'quantity',

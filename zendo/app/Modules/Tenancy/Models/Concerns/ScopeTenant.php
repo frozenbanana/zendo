@@ -10,7 +10,7 @@ class ScopeTenant implements Scope
 {
     public function apply(Builder $builder, Model $model): void
     {
-        $tenantId = app('current_tenant_id');
+        $tenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : null;
 
         if ($tenantId) {
             $builder->where($model->getQualifiedTenantIdColumn(), $tenantId);
@@ -24,4 +24,3 @@ class ScopeTenant implements Scope
         });
     }
 }
-
