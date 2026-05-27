@@ -1,12 +1,40 @@
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: production
+      APP_KEY: ${APP_KEY}
+      APP_URL: ${APP_URL:-http://localhost:8000}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: zendo
+      DB_USERNAME: zendo
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MEILISEARCH_HOST: http://meilisearch:7700
+      MEILISEARCH_KEY: ${MEILISEARCH_KEY:-masterKey}
+      QUEUE_CONNECTION: redis
+      SCOUT_DRIVER: meilisearch
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - storage_data:/var/www/html/storage
+
   postgres:
     image: postgres:16
-    ports:
-      - "5432:5432"
     environment:
       POSTGRES_DB: zendo
       POSTGRES_USER: zendo
-      POSTGRES_PASSWORD: secret
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,8 +45,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -27,12 +53,71 @@ services:
 
   meilisearch:
     image: getmeili/meilisearch:v1.8
-    ports:
-      - "7700:7700"
     environment:
-      MEILI_MASTER_KEY: masterKey
+      MEILI_MASTER_KEY: ${MEILISEARCH_KEY:-masterKey}
     volumes:
       - meilisearch_data:/meili_data
+
+  horizon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: php artisan horizon
+    environment:
+      APP_ENV: production
+      APP_KEY: ${APP_KEY}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: zendo
+      DB_USERNAME: zendo
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      QUEUE_CONNECTION: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  reverb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: php artisan reverb:start --debug
+    ports:
+      - "8080:8080"
+    environment:
+      APP_KEY: ${APP_KEY}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: php artisan schedule:work
+    environment:
+      APP_ENV: production
+      APP_KEY: ${APP_KEY}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: zendo
+      DB_USERNAME: zendo
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      QUEUE_CONNECTION: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   mailpit:
     image: axllent/mailpit:latest
@@ -43,3 +128,4 @@ services:
 volumes:
   postgres_data:
   meilisearch_data:
+  storage_data:

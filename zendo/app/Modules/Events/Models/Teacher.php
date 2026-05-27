@@ -2,12 +2,14 @@
 
 namespace App\Modules\Events\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Model;
+use Laravel\Scout\Searchable;
 
 class Teacher extends Model
 {
     use HasUuids;
+    use Searchable;
 
     protected $fillable = [
         'name',
@@ -20,4 +22,15 @@ class Teacher extends Model
     protected $casts = [
         'specialties' => 'array',
     ];
+
+    public function toSearchableArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'bio' => $this->bio,
+            'specialties' => $this->specialties,
+            'email' => $this->email,
+        ];
+    }
 }

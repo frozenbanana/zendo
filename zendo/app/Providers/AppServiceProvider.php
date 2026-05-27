@@ -13,10 +13,13 @@ use App\Modules\Memberships\Policies\MembershipPlanPolicy;
 use App\Modules\Tenancy\Models\Tenant;
 use App\Modules\Tenancy\Policies\TenantPolicy;
 use Carbon\CarbonImmutable;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -39,6 +42,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->configureRateLimiting();
 
         foreach ($this->policies as $model => $policy) {
             Gate::policy($model, $policy);
@@ -60,6 +64,21 @@ class AppServiceProvider extends ServiceProvider
 
         View::composer('*', function ($view) {
             $view->with('currentTenant', tenant());
+        });
+    }
+
+    protected function configureRateLimiting(): void
+    {
+        RateLimiter::for('login', function (Request $request) {
+            return Limit::perMinute(5)->by($request->ip().'|'.$request->input('email'));
+        });
+
+        RateLimiter::for('api', function (Request $request) {
+            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+        });
+
+        RateLimiter::for('webhooks', function (Request $request) {
+            return Limit::perMinute(120)->by($request->ip());
         });
     }
 

@@ -5,14 +5,18 @@ namespace App\Modules\Events\Models;
 use App\Modules\Registration\Models\Registration;
 use App\Modules\Tenancy\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Laravel\Scout\Searchable;
 
 class Event extends Model
 {
+    use HasFactory;
     use HasTenantScope;
     use HasUuids;
+    use Searchable;
 
     protected $fillable = [
         'tenant_id',
@@ -31,6 +35,19 @@ class Event extends Model
         'ends_at' => 'datetime',
         'is_published' => 'boolean',
     ];
+
+    public function toSearchableArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'tenant_id' => $this->tenant_id,
+            'title' => $this->title,
+            'description' => $this->description,
+            'status' => $this->status,
+            'starts_at' => $this->starts_at?->timestamp,
+            'is_published' => $this->is_published,
+        ];
+    }
 
     public function eventInstances(): HasMany
     {

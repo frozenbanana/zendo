@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\SecurityHeaders;
 use App\Modules\Tenancy\Middleware\ScopeTenant;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -19,10 +20,20 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
             ScopeTenant::class,
+            SecurityHeaders::class,
         ]);
 
         $middleware->api(append: [
             ScopeTenant::class,
+            SecurityHeaders::class,
+        ]);
+
+        $middleware->throttleApi(
+            limit: config('app.rate_limit_api', 60),
+        );
+
+        $middleware->validateCsrfTokens(except: [
+            'stripe/webhook',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

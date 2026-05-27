@@ -8,12 +8,16 @@ use App\Modules\Meals\Models\MealPlan;
 use App\Modules\Memberships\Models\MembershipPlan;
 use App\Modules\People\Models\User;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Laravel\Scout\Searchable;
 
 class Tenant extends Model
 {
+    use HasFactory;
     use HasUuids;
+    use Searchable;
 
     protected $fillable = [
         'slug',
@@ -33,6 +37,17 @@ class Tenant extends Model
         'features' => FeatureFlagsCaster::class,
         'is_active' => 'boolean',
     ];
+
+    public function toSearchableArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'slug' => $this->slug,
+            'name' => $this->name,
+            'description' => $this->description,
+            'custom_domain' => $this->custom_domain,
+        ];
+    }
 
     public function featureFlags(): FeatureFlags
     {

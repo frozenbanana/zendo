@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\HealthCheckController;
 use App\Modules\Hub\Controllers\HubController;
+use App\Modules\Payments\Http\Controllers\StripeWebhookController;
 use App\Modules\People\Models\User;
 use App\Modules\Registration\Http\Controllers\RegistrationController;
 use Illuminate\Support\Facades\Auth;
@@ -21,6 +23,10 @@ Route::prefix('registrations')->name('registrations.')->group(function () {
     Route::post('/', [RegistrationController::class, 'store'])->name('store');
     Route::get('/{id}', [RegistrationController::class, 'show'])->name('show');
 });
+
+Route::post('stripe/webhook', StripeWebhookController::class)->name('stripe.webhook');
+
+Route::get('/health', HealthCheckController::class)->name('health');
 
 Route::middleware(['auth'])->get('/dashboard', function () {
     return view('dashboard');
