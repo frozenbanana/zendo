@@ -91,6 +91,17 @@ The tutorial's policies use `hasPermissionTo()` which requires `spatie/laravel-p
 1. **Cashier is installed but not actively used for one-time payments** - The tutorial creates custom Invoice/Payment models instead of using Cashier's billing. Cashier is needed only for future membership subscriptions.
 2. **Stripe Connect setup requires Stripe platform account** - Not configured in the POC. The Invoice model uses `stripe_checkout_session_id` for simple Checkout Sessions instead.
 3. **No Stripe API keys in .env.example** - Placeholder values need to be replaced with actual keys.
+4. **`bootstrap/app.php` crashes on boot with `config()` call** - Calling `config('app.rate_limit_api', 60)` inside `withMiddleware()` fails because the config repository isn't bound yet. Use `->throttleApi()` without arguments instead and define rate limits in `AppServiceProvider`.
+5. **`tenant()` helper crashes when no tenant is bound** - `app(Tenant::class)` throws `BindingResolutionException` when no tenant is resolved (e.g., on hub/API routes). Fixed by checking `app()->bound(Tenant::class)` first.
+6. **`ScopeTenant` middleware crashes on API routes** - `$request->session()` throws `RuntimeException: Session store not set on request` when called on stateless API requests. Fixed by checking `$request->hasSession()` before accessing session.
+7. **`ScopeTenant` middleware aborts 404 on known tenantless routes** - The middleware called `abort(404)` when no tenant was found, even on `/api/v1/health`, `/up`, `/login`, and other routes that don't need a tenant. Added `isTenantlessRoute()` method to skip tenant resolution on these paths.
+8. **`ScopeTenant` PostgreSQL-specific `SET` statement fails on SQLite** - `DB::statement("SET app.current_tenant_id = ...")` is PostgreSQL-only and crashes during testing with SQLite. Fixed by guarding with `config('database.default') === 'pgsql'`.
+9. **`HasFactory` on models in `App\Modules\*` namespace can't find factories** - Laravel's factory resolution convention expects `Database\Factories\Modules\Tenancy\Models\TenantFactory` for models in `App\Modules\Tenancy\Models`. The actual factory is `Database\Factories\TenantFactory`. Fixed by overriding `newFactory()` on Tenant and Event models.
+10. **Socialite routes crash** - `routes/web.php` used `Socialite::driver('google')` but `laravel/socialite` is not installed. Removed the Google auth routes from `web.php` and the Google Sign-In button from `login.blade.php`.
+11. **`SCOUT_DRIVER` must be set to `null` in `phpunit.xml`** - Without this, Pest tests crash with "Please install the suggested Meilisearch client". Added `<env name="SCOUT_DRIVER" value="null"/>`.
+12. **Registration model requires `event_id`** - The registration migration has `event_id` as NOT NULL but the tutorial's registration wizard examples don't provide it. Tests must create an Event first.
+13. **Payment model enums must use enum classes, not raw strings** - `Refund` status and `StripeWebhook` status need `RefundStatus` and `WebhookProcessStatus` enum classes respectively. Using raw strings like `'PENDING'` fails when the model casts to the enum.
+14. **`InvoiceLineItem` missing `tenant_id`** - In a multi-tenant app, line items must be tenant-scoped. Added `tenant_id` column, foreign key, and `HasTenantScope` trait.
 
 ## Section 10: Search with Meilisearch
 
@@ -119,3 +130,11 @@ The tutorial's policies use `hasPermissionTo()` which requires `spatie/laravel-p
 1. **Dockerfile uses PHP 8.3** but the app uses PHP 8.5 features. Updated Dockerfile to use `php:8.5-fpm-alpine`.
 2. **Supervisor config paths** need adjustment based on actual project directory structure.
 3. **No CI/CD pipeline configured** - The tutorial mentions GitHub Actions but the POC already has a `.github/workflows/deploy.yml` that needs updating.
+4. **`docker-compose.yml` needs host port mappings for local dev** - The original compose file exposes postgres/redis ports only to the internal Docker network. Added `"5432:5432"` and `"6379:6379"` port mappings for `php artisan serve` to work locally.
+5. **`APP_URL` should use `ivy.zendo.test`** - The default `localhost:8000` doesn't match the multi-tenant subdomain resolution. Updated `.env` to `http://ivy.zendo.test:8000`.
+
+## Cross-Section Issues
+
+1. **`php artisan serve` returns 500 until multiple fixes applied** - The app as committed in section 8 doesn't boot. Required: fix `config()` in bootstrap, fix `tenant()` helper, fix `ScopeTenant` middleware, remove Socialite routes, register API routes, add factory overrides.
+2. **Frontend must be built before Inertia pages render** - Running `php artisan serve` without `npm run build` results in "Unable to locate file in Vite manifest" errors for all Inertia-rendered pages.
+3. **Test database is SQLite (in-memory)** but production is PostgreSQL. Any PostgreSQL-specific features (RLS, `SET` statements, `ilike`) must be guarded or tests will fail.
