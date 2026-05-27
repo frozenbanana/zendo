@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Registration\Providers\RegistrationEventServiceProvider;
 use App\Modules\Tenancy\Providers\FeatureServiceProvider;
 use App\Providers\AppServiceProvider;
 use App\Providers\Filament\AdminPanelProvider;
@@ -11,5 +12,6 @@ return [
     AdminPanelProvider::class,
     ZendoPanelProvider::class,
     FeatureServiceProvider::class,
+    RegistrationEventServiceProvider::class,
     FortifyServiceProvider::class,
 ];
