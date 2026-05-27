@@ -2,6 +2,7 @@
 
 use App\Modules\Hub\Controllers\HubController;
 use App\Modules\People\Models\User;
+use App\Modules\Registration\Http\Controllers\RegistrationController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -13,6 +14,12 @@ Route::prefix('hub')->name('hub.')->group(function () {
     Route::get('/events', [HubController::class, 'events'])->name('events');
     Route::get('/events/{id}', [HubController::class, 'eventDetail'])->name('events.show');
     Route::get('/teachers', [HubController::class, 'teachers'])->name('teachers');
+});
+
+Route::prefix('registrations')->name('registrations.')->group(function () {
+    Route::get('/create', [RegistrationController::class, 'create'])->name('create');
+    Route::post('/', [RegistrationController::class, 'store'])->name('store');
+    Route::get('/{id}', [RegistrationController::class, 'show'])->name('show');
 });
 
 Route::middleware(['auth'])->get('/dashboard', function () {
