@@ -107,8 +107,31 @@ export default defineConfig({
 });
 ```
 
-??? tip "Why `ssr.noExternal`?"
-    Inertia's React adapter includes SSR-specific code that must be bundled into the SSR build rather than treated as an external dependency. Without this config, the SSR server would crash trying to resolve Inertia's internal imports.
+??? important "Inertia v3 uses the `@inertiajs/vite` plugin"
+    If you're using Inertia v3 (the latest), the recommended approach is to use the `@inertiajs/vite` plugin instead of manually configuring SSR:
+
+    ```bash
+    npm install @inertiajs/vite
+    ```
+
+    Then update `vite.config.js`:
+
+    ```js
+    import inertia from '@inertiajs/vite';
+
+    export default defineConfig({
+        plugins: [
+            laravel({
+                input: ['resources/js/app.tsx', 'resources/css/app.css'],
+                refresh: true,
+            }),
+            inertia({ ssr: { enabled: true } }),
+            react(),
+        ],
+    });
+    ```
+
+    The `@inertiajs/vite` plugin handles SSR configuration automatically, so you don't need the manual `ssr` key or the separate `ssr.tsx` entry point configuration. For simplicity, this tutorial uses the manual configuration, but either approach works.
 
 ## Step 3: Create the Root Layout
 
@@ -164,7 +187,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Zendo';
 
-export default function defineApple(app) {
+export default function defineApp(app) {
     createInertiaApp({
         title: (title) => `${title} — ${appName}`,
         resolve: (name) =>
@@ -190,7 +213,7 @@ shadcn/ui gives us pre-built, accessible, beautiful React components. It's not a
 ```bash
 cd ~/Work/metaprovide/lotus/zendo
 
-# Initialize shadcn/ui
+# Initialize shadcn/ui (this creates components.json and sets up Tailwind)
 npx shadcn@latest init
 ```
 
@@ -202,7 +225,7 @@ When prompted, choose:
 - TypeScript: **Yes**
 - Tailwind config path: **resources/css/app.css** (or adjust to match your setup)
 
-Now install the components we'll need:
+This creates `components.json` in your project root and sets up the Tailwind CSS configuration. Now install the components we'll need:
 
 ```bash
 npx shadcn@latest add card button input badge dialog toast table search
@@ -225,6 +248,7 @@ Create `app/Modules/Hub/Controllers/HubController.php`:
 namespace App\Modules\Hub\Controllers;
 
 use App\Modules\Tenancy\Models\Tenant;
+use App\Modules\Events\Models\Event;
 use App\Modules\Events\Models\EventInstance;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
@@ -238,8 +262,8 @@ class HubController
             ->orderBy('name')
             ->get();
 
-        $featuredEvents = EventInstance::with(['event.tenant', 'event.teachers'])
-            ->where('is_published', true)
+        $featuredEvents = Event::with(['tenant', 'teachers'])
+            ->where('status', 'published')
             ->where('starts_at', '>', now())
             ->orderBy('starts_at')
             ->limit(6)
@@ -265,19 +289,19 @@ class HubController
 
     public function events(Request $request)
     {
-        $query = EventInstance::with(['event.tenant', 'event.teachers'])
-            ->where('is_published', true)
+        $query = Event::with(['tenant', 'teachers'])
+            ->where('status', 'published')
             ->where('starts_at', '>', now());
 
         if ($search = $request->input('search')) {
-            $query->whereHas('event', function ($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('title', 'ilike', "%{$search}%")
                   ->orWhere('description', 'ilike', "%{$search}%");
             });
         }
 
         if ($center = $request->input('center')) {
-            $query->whereHas('event.tenant', function ($q) use ($center) {
+            $query->whereHas('tenant', function ($q) use ($center) {
                 $q->where('slug', $center);
             });
         }
@@ -389,25 +413,22 @@ import { Button } from '@/components/ui/button';
 import { route } from '@/types/generated';
 import { router } from '@inertiajs/react';
 
-interface EventInstance {
+interface EventData {
     id: string;
+    title: string;
+    description: string;
+    slug: string;
     starts_at: string;
     ends_at: string;
+    capacity: number;
+    registrations_count: number;
     price_cents: number;
-    spots_total: number;
-    spots_taken: number;
-    event: {
-        id: string;
-        title: string;
-        description: string;
-        slug: string;
-        tenant: { slug: string; name: string };
-        teachers: { name: string }[];
-    };
+    tenant: { slug: string; name: string };
+    teachers: { name: string }[];
 }
 
 interface Props {
-    events: { data: EventInstance[]; current_page: number; last_page: number };
+    events: { data: EventData[]; current_page: number; last_page: number };
     centers: { slug: string; name: string }[];
     filters: { search: string; center: string };
 }
@@ -468,42 +489,46 @@ export default function HubEvents({ events, centers, filters }: Props) {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {events.data.map((instance) => (
-                        <Card key={instance.id} className="hover:shadow-lg transition-shadow">
+                    {events.data.map((event) => (
+                        <Card key={event.id} className="hover:shadow-lg transition-shadow">
                             <CardHeader>
                                 <div className="flex items-center justify-between">
                                     <Badge variant="secondary">
-                                        {instance.event.tenant.name}
+                                        {event.tenant.name}
                                     </Badge>
-                                    <span className="text-sm text-muted-foreground">
-                                        {instance.spots_taken}/{instance.spots_total} spots
-                                    </span>
+                                    {event.capacity > 0 && (
+                                        <span className="text-sm text-muted-foreground">
+                                            {event.registrations_count}/{event.capacity} spots
+                                        </span>
+                                    )}
                                 </div>
                                 <CardTitle className="text-lg">
-                                    <Link href={route('hub.events.show', { id: instance.id })}>
-                                        {instance.event.title}
+                                    <Link href={route('hub.events.show', { id: event.id })}>
+                                        {event.title}
                                     </Link>
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
                                 <p className="text-sm text-muted-foreground line-clamp-2">
-                                    {instance.event.description}
+                                    {event.description}
                                 </p>
                                 <div className="mt-4 flex items-center justify-between">
                                     <span className="text-sm">
-                                        {new Date(instance.starts_at).toLocaleDateString('en-US', {
+                                        {new Date(event.starts_at).toLocaleDateString('en-US', {
                                             month: 'short',
                                             day: 'numeric',
                                             year: 'numeric',
                                         })}
                                     </span>
-                                    <span className="font-semibold">
-                                        €{instance.price_cents / 100}
-                                    </span>
+                                    {event.price_cents > 0 && (
+                                        <span className="font-semibold">
+                                            €{event.price_cents / 100}
+                                        </span>
+                                    )}
                                 </div>
-                                {instance.event.teachers.length > 0 && (
+                                {event.teachers.length > 0 && (
                                     <div className="mt-2 flex gap-1 flex-wrap">
-                                        {instance.event.teachers.map((teacher) => (
+                                        {event.teachers.map((teacher) => (
                                             <Badge key={teacher.name} variant="outline" className="text-xs">
                                                 {teacher.name}
                                             </Badge>
@@ -597,21 +622,31 @@ interface Props {
         title: string;
         description: string;
         slug: string;
+        starts_at: string;
+        ends_at: string;
+        capacity: number;
+        registrations_count: number;
+        price_cents: number;
         tenant: { slug: string; name: string };
         teachers: { name: string; bio: string }[];
         instances: {
             id: string;
             starts_at: string;
             ends_at: string;
-            price_cents: number;
-            spots_total: number;
-            spots_taken: number;
+            price_override_cents: number | null;
+            capacity: number | null;
+            registrations_count: number;
         }[];
     };
 }
 
 export default function EventDetail({ event }: Props) {
     const nextInstance = event.instances[0];
+
+    const spotsRemaining = nextInstance
+        ? (nextInstance.capacity ?? event.capacity) - nextInstance.registrations_count
+        : event.capacity - event.registrations_count;
+    const price = nextInstance?.price_override_cents ?? event.price_cents;
 
     return (
         <>
@@ -655,11 +690,11 @@ export default function EventDetail({ event }: Props) {
                                     })}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                    {nextInstance.spots_total - nextInstance.spots_taken} spots remaining
+                                    {spotsRemaining} spots remaining
                                 </p>
                             </div>
                             <div className="text-right">
-                                <p className="text-2xl font-bold">&#8364;{nextInstance.price_cents / 100}</p>
+                                <p className="text-2xl font-bold">&#8364;{price / 100}</p>
                                 <Link href={route('register.create', { instance: nextInstance.id })}>
                                     <Button size="lg" className="mt-2">
                                         Register Now
@@ -686,38 +721,43 @@ And add the controller method:
 ```php
 public function eventDetail(string $id)
 {
-    $instance = EventInstance::with(['event.tenant', 'event.teachers'])
-        ->where('is_published', true)
+    $event = Event::with(['tenant', 'teachers'])
+        ->where('status', 'published')
         ->where('id', $id)
         ->firstOrFail();
 
+    $instances = $event->instances()
+        ->where('starts_at', '>', now())
+        ->orderBy('starts_at')
+        ->get();
+
     return Inertia::render('Hub/EventDetail', [
         'event' => [
-            'id' => $instance->event->id,
-            'title' => $instance->event->title,
-            'description' => $instance->event->description,
-            'slug' => $instance->event->slug,
+            'id' => $event->id,
+            'title' => $event->title,
+            'description' => $event->description,
+            'slug' => $event->slug,
+            'starts_at' => $event->starts_at->toIso8601String(),
+            'ends_at' => $event->ends_at->toIso8601String(),
+            'capacity' => $event->capacity,
+            'registrations_count' => $event->registrations_count,
+            'price_cents' => $event->price_cents,
             'tenant' => [
-                'slug' => $instance->event->tenant->slug,
-                'name' => $instance->event->tenant->name,
+                'slug' => $event->tenant->slug,
+                'name' => $event->tenant->name,
             ],
-            'teachers' => $instance->event->teachers->map(fn ($t) => [
+            'teachers' => $event->teachers->map(fn ($t) => [
                 'name' => $t->name,
                 'bio' => $t->bio,
             ]),
-            'instances' => $instance->event->instances()
-                ->where('is_published', true)
-                ->where('starts_at', '>', now())
-                ->orderBy('starts_at')
-                ->get()
-                ->map(fn ($i) => [
-                    'id' => $i->id,
-                    'starts_at' => $i->starts_at->toIso8601String(),
-                    'ends_at' => $i->ends_at->toIso8601String(),
-                    'price_cents' => $i->price_cents,
-                    'spots_total' => $i->spots_total,
-                    'spots_taken' => $i->spots_taken,
-                ]),
+            'instances' => $instances->map(fn ($i) => [
+                'id' => $i->id,
+                'starts_at' => $i->starts_at->toIso8601String(),
+                'ends_at' => $i->ends_at->toIso8601String(),
+                'price_override_cents' => $i->price_override_cents,
+                'capacity' => $i->capacity,
+                'registrations_count' => $i->registrations_count,
+            ]),
         ],
     ]);
 }

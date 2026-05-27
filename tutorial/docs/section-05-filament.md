@@ -69,7 +69,7 @@ graph TD
 Filament was added to `composer.json` in Section 1, but let's make sure it's installed and configured:
 
 ```bash
-composer require filament/filament:"^3.2"
+composer require filament/filament:"^5.6"
 php artisan filament:install --panels
 ```
 
@@ -101,7 +101,6 @@ use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsToSession;
 use App\Modules\Tenancy\Models\Tenant;
-use Filament\Tenancy\TenancyMode;
 
 class ZendoPanelProvider extends PanelProvider
 {
@@ -124,11 +123,7 @@ class ZendoPanelProvider extends PanelProvider
                 for: 'App\\Modules\\*\\Filament\\Widgets'
             )
             ->authGuard('web')
-            ->tenant(Tenant::class, TenancyMode::Tenant)
-            ->tenantBilling(false)
-            ->tenantRepositoryAttribute('slug')
-            ->tenantLoginRoute('filament.zendo.tenant.login')
-            ->tenantRegistrationRoute('filament.zendo.tenant.registration')
+            ->tenant(Tenant::class, 'slug')
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -142,13 +137,33 @@ class ZendoPanelProvider extends PanelProvider
 }
 ```
 
-??? question "Why TenancyMode::Tenant?"
-    Filament supports two multi-tenancy modes:
+??? question "Why tenant('slug')?"
+    Filament v5 supports multi-tenancy via `->tenant(Tenant::class, 'slug')`. The second argument tells Filament which column on the Tenant model to use for URL slugs. The URL becomes `/zendo/ivy/events` — clean and SEO-friendly.
 
-    - **TenancyMode::Tenant** — The tenant is resolved from the URL (e.g., `/zendo/ivy/events`). Every request is scoped to a specific tenant. This is what we want — each center admin works within their center's context.
-    - **TenancyMode::TenantAware** — The tenant is optional. Users can see data across tenants. Useful for super-admins, but not what center admins need.
+    In Filament v3, this used `TenancyMode::Tenant` as the second argument, but v5 simplified the API. Filament resolves the tenant from the URL automatically — there's no "all tenants" view for center admins.
 
-    Our panel forces users into a tenant context. There's no "all tenants" view.
+    ??? warning "User model must implement HasTenants"
+        For multi-tenancy to work, your `User` model must implement `Filament\Models\Contracts\HasTenants`. Add the interface and its two methods:
+
+        ```php
+        use Filament\Models\Contracts\HasTenants;
+        use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+
+        class User extends Authenticatable implements HasTenants
+        {
+            public function getTenants(): \Illuminate\Database\Eloquent\Collection
+            {
+                return $this->tenants;
+            }
+
+            public function canAccessTenant(Model $tenant): bool
+            {
+                return $this->tenants()->where('tenants.id', $tenant->id)->exists();
+            }
+        }
+        ```
+
+        Without this, Filament won't know which tenants a user belongs to or be able to resolve the current tenant from the URL.
 
 ## Step 3: Create the EventResource
 
@@ -174,7 +189,7 @@ namespace App\Modules\Events\Filament;
 use App\Modules\Events\Filament\EventResource\Pages;
 use App\Modules\Events\Models\Event;
 use Filament\Forms;
-use Filament\Forms\Form;
+use Filament\Schemas\Schema;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -185,7 +200,7 @@ class EventResource extends Resource
 {
     protected static ?string $model = Event::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-calendar';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-calendar';
 
     protected static ?int $navigationSort = 1;
 
@@ -194,9 +209,9 @@ class EventResource extends Resource
         return true;
     }
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
+        return $schema
             ->schema([
                 Forms\Components\Section::make('Event Details')
                     ->schema([
@@ -260,12 +275,14 @@ class EventResource extends Resource
                     ->sortable()
                     ->weight('bold'),
 
-                Tables\Columns\BadgeColumn::make('status')
-                    ->colors([
+                Tables\Columns\TextColumn::make('status')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
                         'draft' => 'gray',
                         'published' => 'success',
                         'archived' => 'danger',
-                    ]),
+                        default => 'gray',
+                    }),
 
                 Tables\Columns\TextColumn::make('starts_at')
                     ->date()
@@ -359,7 +376,7 @@ Edit `app/Modules/Events/Filament/EventResource/RelationManagers/EventInstancesR
 namespace App\Modules\Events\Filament\EventResource\RelationManagers;
 
 use Filament\Forms;
-use Filament\Forms\Form;
+use Filament\Schemas\Schema;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -370,11 +387,11 @@ class EventInstancesRelationManager extends RelationManager
 
     protected static ?string $title = 'Instances';
 
-    protected static ?string $icon = 'heroicon-o-calendar-days';
+    protected static string|\BackedEnum|null $icon = 'heroicon-o-calendar-days';
 
-    public function form(Form $form): Form
+    public function form(Schema $schema): Schema
     {
-        return $form
+        return $schema
             ->schema([
                 Forms\Components\TextInput::make('title')
                     ->required()
@@ -462,37 +479,37 @@ class EventPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasPermissionTo('view_events');
+        return true;
     }
 
     public function view(User $user, Event $event): bool
     {
-        return $user->hasPermissionTo('view_events');
+        return true;
     }
 
     public function create(User $user): bool
     {
-        return $user->hasPermissionTo('create_events');
+        return in_array($user->roleInCurrentTenant(), ['admin', 'editor']);
     }
 
     public function update(User $user, Event $event): bool
     {
-        return $user->hasPermissionTo('update_events');
+        return in_array($user->roleInCurrentTenant(), ['admin', 'editor']);
     }
 
     public function delete(User $user, Event $event): bool
     {
-        return $user->hasPermissionTo('delete_events');
+        return $user->roleInCurrentTenant() === 'admin' || $user->isGlobalAdmin();
     }
 
     public function restore(User $user, Event $event): bool
     {
-        return $user->hasPermissionTo('delete_events');
+        return $user->roleInCurrentTenant() === 'admin' || $user->isGlobalAdmin();
     }
 
     public function forceDelete(User $user, Event $event): bool
     {
-        return $user->hasPermissionTo('delete_events');
+        return $user->roleInCurrentTenant() === 'admin' || $user->isGlobalAdmin();
     }
 }
 ```
@@ -543,7 +560,7 @@ namespace App\Modules\Meals\Filament;
 
 use App\Modules\Meals\Models\MealPlan;
 use Filament\Forms;
-use Filament\Forms\Form;
+use Filament\Schemas\Schema;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -554,7 +571,7 @@ class MealPlanResource extends Resource
 {
     protected static ?string $model = MealPlan::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-cake';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cake';
 
     protected static ?int $navigationSort = 5;
 
@@ -563,9 +580,9 @@ class MealPlanResource extends Resource
         return Feature::active('meals', Filament::getTenant());
     }
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
+        return $schema
             ->schema([
                 Forms\Components\TextInput::make('name')
                     ->required()
@@ -642,7 +659,7 @@ namespace App\Modules\Lodging\Filament;
 
 use App\Modules\Lodging\Models\Building;
 use Filament\Forms;
-use Filament\Forms\Form;
+use Filament\Schemas\Schema;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -653,7 +670,7 @@ class BuildingResource extends Resource
 {
     protected static ?string $model = Building::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-building-office';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-building-office';
 
     protected static ?int $navigationSort = 6;
 
@@ -662,9 +679,9 @@ class BuildingResource extends Resource
         return Feature::active('lodging', Filament::getTenant());
     }
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
+        return $schema
             ->schema([
                 Forms\Components\TextInput::make('name')
                     ->required()
@@ -746,7 +763,7 @@ namespace App\Modules\Memberships\Filament;
 
 use App\Modules\Memberships\Models\MembershipPlan;
 use Filament\Forms;
-use Filament\Forms\Form;
+use Filament\Schemas\Schema;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -757,7 +774,7 @@ class MembershipPlanResource extends Resource
 {
     protected static ?string $model = MembershipPlan::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-credit-card';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-credit-card';
 
     protected static ?int $navigationSort = 7;
 
@@ -766,9 +783,9 @@ class MembershipPlanResource extends Resource
         return Feature::active('memberships', Filament::getTenant());
     }
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
+        return $schema
             ->schema([
                 Forms\Components\TextInput::make('name')
                     ->required()
@@ -809,12 +826,14 @@ class MembershipPlanResource extends Resource
                     ->money(fn () => Filament::getTenant()->currency)
                     ->sortable(),
 
-                Tables\Columns\BadgeColumn::make('billing_cycle')
-                    ->colors([
+                Tables\Columns\TextColumn::make('billing_cycle')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
                         'monthly' => 'info',
                         'quarterly' => 'warning',
                         'annual' => 'success',
-                    ]),
+                        default => 'gray',
+                    }),
 
                 Tables\Columns\IconColumn::make('is_active')
                     ->boolean(),
@@ -846,11 +865,16 @@ class MembershipPlanResource extends Resource
     Every feature-gated resource follows the same pattern:
 
     ```php
+    use Filament\Facades\Filament;
+    use Laravel\Pennant\Feature;
+
     public static function canAccess(): bool
     {
         return Feature::active('<feature-name>', Filament::getTenant());
     }
     ```
+
+    **Important:** The `canAccess()` method requires the `Filament\Facades\Filament` import to call `Filament::getTenant()`. Without it, you'll get a "Call to undefined method" error.
 
     This is the single gate that controls everything. When it returns `false`:
 
@@ -890,27 +914,27 @@ class MealPlanPolicy
 
     public function viewAny(User $user): bool
     {
-        return $user->can('view_meals');
+        return true;
     }
 
     public function view(User $user, MealPlan $mealPlan): bool
     {
-        return $user->can('view_meals');
+        return true;
     }
 
     public function create(User $user): bool
     {
-        return $user->can('create_meals');
+        return in_array($user->roleInCurrentTenant(), ['admin', 'editor']);
     }
 
     public function update(User $user, MealPlan $mealPlan): bool
     {
-        return $user->can('update_meals');
+        return in_array($user->roleInCurrentTenant(), ['admin', 'editor']);
     }
 
     public function delete(User $user, MealPlan $mealPlan): bool
     {
-        return $user->can('delete_meals');
+        return $user->roleInCurrentTenant() === 'admin' || $user->isGlobalAdmin();
     }
 }
 ```
@@ -940,27 +964,27 @@ class BuildingPolicy
 
     public function viewAny(User $user): bool
     {
-        return $user->can('view_lodging');
+        return true;
     }
 
     public function view(User $user, Building $building): bool
     {
-        return $user->can('view_lodging');
+        return true;
     }
 
     public function create(User $user): bool
     {
-        return $user->can('create_lodging');
+        return in_array($user->roleInCurrentTenant(), ['admin', 'editor']);
     }
 
     public function update(User $user, Building $building): bool
     {
-        return $user->can('update_lodging');
+        return in_array($user->roleInCurrentTenant(), ['admin', 'editor']);
     }
 
     public function delete(User $user, Building $building): bool
     {
-        return $user->can('delete_lodging');
+        return $user->roleInCurrentTenant() === 'admin' || $user->isGlobalAdmin();
     }
 }
 ```
@@ -990,27 +1014,27 @@ class MembershipPlanPolicy
 
     public function viewAny(User $user): bool
     {
-        return $user->can('view_memberships');
+        return true;
     }
 
     public function view(User $user, MembershipPlan $plan): bool
     {
-        return $user->can('view_memberships');
+        return true;
     }
 
     public function create(User $user): bool
     {
-        return $user->can('create_memberships');
+        return in_array($user->roleInCurrentTenant(), ['admin', 'editor']);
     }
 
     public function update(User $user, MembershipPlan $plan): bool
     {
-        return $user->can('update_memberships');
+        return in_array($user->roleInCurrentTenant(), ['admin', 'editor']);
     }
 
     public function delete(User $user, MembershipPlan $plan): bool
     {
-        return $user->can('delete_memberships');
+        return $user->roleInCurrentTenant() === 'admin' || $user->isGlobalAdmin();
     }
 }
 ```
@@ -1052,7 +1076,7 @@ use Filament\Facades\Filament;
 
 class RegistrationsThisWeekChart extends ChartWidget
 {
-    protected static ?string $heading = 'Registrations This Week';
+    protected ?string $heading = 'Registrations This Week';
 
     protected static ?int $sort = 1;
 
@@ -1211,7 +1235,7 @@ class CheckInBoard extends Page
 
     protected static ?int $navigationSort = 100;
 
-    protected static string $view = 'filament.pages.check-in-board';
+    protected string $view = 'filament.pages.check-in-board';
 
     public static function shouldRegisterNavigation(): bool
     {
@@ -1239,7 +1263,7 @@ class KitchenManifest extends Page
 
     protected static ?int $navigationSort = 101;
 
-    protected static string $view = 'filament.pages.kitchen-manifest';
+    protected string $view = 'filament.pages.kitchen-manifest';
 
     public static function shouldRegisterNavigation(): bool
     {
@@ -1435,7 +1459,7 @@ If any gate returns `false`, the request is blocked. This is defense in depth.
 !!! success "Checkpoint"
     At this point you should have:
 
-    - ✅ Filament panel configured with `TenancyMode::Tenant`
+    - ✅ Filament panel configured with `->tenant(Tenant::class, 'slug')`
     - ✅ EventResource with full form, table, and filters
     - ✅ EventInstanceRelationManager for inline instance management
     - ✅ EventPolicy with role-based access (VIEWER, EDITOR, ADMIN)

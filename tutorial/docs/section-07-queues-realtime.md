@@ -72,7 +72,7 @@ Reverb is Laravel's first-party WebSocket server. Horizon gives us a beautiful d
 ```bash
 cd ~/Work/metaprovide/lotus/zendo
 
-# Reverb — WebSocket server
+# Reverb — WebSocket server (Laravel's first-party broadcasting server)
 composer require laravel/reverb
 
 # Horizon — queue monitoring dashboard
@@ -158,9 +158,6 @@ Edit `app/Modules/Registration/Events/RegistrationConfirmed.php`:
 namespace App\Modules\Registration\Events;
 
 use App\Modules\Registration\Models\Registration;
-use Illuminate\Broadcasting\Channel;
-use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
@@ -175,7 +172,9 @@ class RegistrationConfirmed
 ```
 
 ??? question "Why not `ShouldBroadcast` on the event itself?"
-    We separate the **broadcast** from the **event**. The `RegistrationConfirmed` event is a plain data object. The `BroadcastToTenant` listener decides *how* to broadcast it — which channel, what payload, whether to queue it. This separation means we can add new broadcast channels later without touching the event class. The event is "what happened"; the listeners are "what to do about it".
+    We separate the **broadcast** from the **event**. The `RegistrationConfirmed` event is a plain data object — it doesn't implement `ShouldBroadcast`. Instead, `BroadcastToTenant` is both a listener (registered in `EventServiceProvider`) **and** a broadcastable event (implements `ShouldBroadcast`). When Laravel dispatches `BroadcastToTenant` as a listener, it sees the `ShouldBroadcast` interface and pushes it to the queue for broadcasting via Reverb.
+
+    This separation means we can add new broadcast channels later without touching the event class. The event is "what happened"; the listeners are "what to do about it". Note that `BroadcastToTenant` uses the `InteractsWithQueue` trait for retry logic — without it, a failed broadcast would be silently discarded.
 
 ## Step 4: Create the Listeners
 
@@ -246,6 +245,9 @@ class UpdateAvailability
 
 This pushes a real-time notification to the tenant's admin panel. We'll set up the Reverb channel subscription later — for now, we broadcast the event.
 
+!!! note "ShouldBroadcast vs InteractsWithQueue"
+    The `BroadcastToTenant` listener implements `ShouldBroadcast`, which tells Laravel to broadcast the event over WebSockets via Reverb. Because broadcasting is inherently async, we also add the `InteractsWithQueue` trait to handle retry logic if the broadcast job fails. Without `InteractsWithQueue`, a failed broadcast would silently discard — with it, Laravel retries using the queue's configured retry logic.
+
 Create `app/Modules/Registration/Listeners/BroadcastToTenant.php`:
 
 ```php
@@ -256,11 +258,12 @@ namespace App\Modules\Registration\Listeners;
 use App\Modules\Registration\Events\RegistrationConfirmed;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
 class BroadcastToTenant implements ShouldBroadcast
 {
-    use SerializesModels;
+    use InteractsWithQueue, SerializesModels;
 
     public function __construct(
         public RegistrationConfirmed $event,
