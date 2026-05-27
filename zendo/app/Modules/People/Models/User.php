@@ -2,12 +2,16 @@
 
 namespace App\Modules\People\Models;
 
+use Filament\Models\Contracts\HasTenants;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 
-class User extends Authenticatable
+class User extends Authenticatable implements HasTenants
 {
     use HasFactory;
     use HasUuids;
@@ -65,5 +69,16 @@ class User extends Authenticatable
     public function roleInCurrentTenant(): ?string
     {
         return $this->roleInTenant();
+    }
+
+    public function getTenants(Panel $panel): Collection
+    {
+        return $this->tenantRoles()->with('tenant')->get()->pluck('tenant');
+    }
+
+    public function canAccessTenant(Model $tenant): bool
+    {
+        return $this->tenantRoles()->where('tenant_id', $tenant->id)->exists()
+            || $this->isGlobalAdmin();
     }
 }

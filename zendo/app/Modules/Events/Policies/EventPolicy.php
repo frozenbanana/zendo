@@ -2,8 +2,8 @@
 
 namespace App\Modules\Events\Policies;
 
-use App\Modules\People\Models\User;
 use App\Modules\Events\Models\Event;
+use App\Modules\People\Models\User;
 
 class EventPolicy
 {
@@ -49,6 +49,24 @@ class EventPolicy
     }
 
     public function delete(User $user, Event $event): bool
+    {
+        if ($user->isGlobalAdmin()) {
+            return true;
+        }
+
+        return $user->roleInCurrentTenant() === 'ADMIN';
+    }
+
+    public function restore(User $user, Event $event): bool
+    {
+        if ($user->isGlobalAdmin()) {
+            return true;
+        }
+
+        return $user->roleInCurrentTenant() === 'ADMIN';
+    }
+
+    public function forceDelete(User $user, Event $event): bool
     {
         if ($user->isGlobalAdmin()) {
             return true;

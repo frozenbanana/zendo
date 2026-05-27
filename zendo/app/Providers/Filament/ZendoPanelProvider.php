@@ -2,8 +2,8 @@
 
 namespace App\Providers\Filament;
 
+use App\Modules\Tenancy\Models\Tenant;
 use Filament\Http\Middleware\Authenticate;
-use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages\Dashboard;
@@ -14,8 +14,6 @@ use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
-use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
-use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
@@ -27,14 +25,24 @@ class ZendoPanelProvider extends PanelProvider
             ->id('zendo')
             ->path('zendo')
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::Indigo,
             ])
-            ->discoverResources(in: app_path('Filament/Zendo/Resources'), for: 'App\Filament\Zendo\Resources')
-            ->discoverPages(in: app_path('Filament/Zendo/Pages'), for: 'App\Filament\Zendo\Pages')
+            ->tenant(Tenant::class, 'slug')
+            ->discoverResources(
+                in: app_path('Modules/*/Filament'),
+                for: 'App\\Modules\\*\\Filament'
+            )
+            ->discoverPages(
+                in: app_path('Modules/*/Filament/Pages'),
+                for: 'App\\Modules\\*\\Filament\\Pages'
+            )
+            ->discoverWidgets(
+                in: app_path('Modules/*/Filament/Widgets'),
+                for: 'App\\Modules\\*\\Filament\\Widgets'
+            )
             ->pages([
                 Dashboard::class,
             ])
-            ->discoverWidgets(in: app_path('Filament/Zendo/Widgets'), for: 'App\Filament\Zendo\Widgets')
             ->widgets([
                 AccountWidget::class,
                 FilamentInfoWidget::class,
@@ -43,15 +51,10 @@ class ZendoPanelProvider extends PanelProvider
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
-                AuthenticateSession::class,
                 ShareErrorsFromSession::class,
-                PreventRequestForgery::class,
-                SubstituteBindings::class,
+                Authenticate::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
-            ])
-            ->authMiddleware([
-                Authenticate::class,
             ]);
     }
 }

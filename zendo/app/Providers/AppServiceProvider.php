@@ -2,38 +2,40 @@
 
 namespace App\Providers;
 
+use App\Modules\Events\Models\Event;
+use App\Modules\Events\Policies\EventPolicy;
+use App\Modules\Lodging\Models\Building;
+use App\Modules\Lodging\Policies\BuildingPolicy;
+use App\Modules\Meals\Models\MealPlan;
+use App\Modules\Meals\Policies\MealPlanPolicy;
+use App\Modules\Memberships\Models\MembershipPlan;
+use App\Modules\Memberships\Policies\MembershipPlanPolicy;
+use App\Modules\Tenancy\Models\Tenant;
+use App\Modules\Tenancy\Policies\TenantPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\ServiceProvider;
-use Illuminate\Validation\Rules\Password;
-use App\Modules\Events\Models\Event;
-use App\Modules\Events\Policies\EventPolicy;
-use App\Modules\Tenancy\Models\Tenant;
-use App\Modules\Tenancy\Policies\TenantPolicy;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Password;
 
 class AppServiceProvider extends ServiceProvider
 {
-
     protected $policies = [
         Event::class => EventPolicy::class,
+        MealPlan::class => MealPlanPolicy::class,
+        Building::class => BuildingPolicy::class,
+        MembershipPlan::class => MembershipPlanPolicy::class,
         Tenant::class => TenantPolicy::class,
     ];
 
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
         //
     }
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
         $this->configureDefaults();
@@ -61,9 +63,6 @@ class AppServiceProvider extends ServiceProvider
         });
     }
 
-    /**
-     * Configure default behaviors for production-ready applications.
-     */
     protected function configureDefaults(): void
     {
         Date::use(CarbonImmutable::class);
