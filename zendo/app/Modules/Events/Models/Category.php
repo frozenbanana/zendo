@@ -2,12 +2,18 @@
 
 namespace App\Modules\Events\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Database\Factories\CategoryFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Model;
 
 class Category extends Model
 {
     use HasUuids;
+
+    protected static function newFactory()
+    {
+        return CategoryFactory::new();
+    }
 
     protected $fillable = [
         'name',

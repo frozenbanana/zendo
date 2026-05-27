@@ -9,6 +9,7 @@ use App\Modules\People\Models\User;
 use App\Modules\Registration\Enums\RegistrationStatus;
 use App\Modules\Tenancy\Models\Concerns\HasTenantScope;
 use App\Modules\Tenancy\Models\Tenant;
+use Database\Factories\RegistrationFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,6 +20,11 @@ class Registration extends Model
 {
     use HasTenantScope;
     use HasUuids;
+
+    protected static function newFactory()
+    {
+        return RegistrationFactory::new();
+    }
 
     protected $fillable = [
         'tenant_id',

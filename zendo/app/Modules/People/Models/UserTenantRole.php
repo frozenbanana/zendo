@@ -3,13 +3,20 @@
 namespace App\Modules\People\Models;
 
 use App\Modules\Tenancy\Models\Concerns\HasTenantScope;
+use App\Modules\Tenancy\Models\Tenant;
+use Database\Factories\UserTenantRoleFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
 class UserTenantRole extends Model
 {
-    use HasUuids;
     use HasTenantScope;
+    use HasUuids;
+
+    protected static function newFactory()
+    {
+        return UserTenantRoleFactory::new();
+    }
 
     protected $fillable = [
         'tenant_id',
@@ -24,6 +31,6 @@ class UserTenantRole extends Model
 
     public function tenant()
     {
-        return $this->belongsTo(\App\Modules\Tenancy\Models\Tenant::class);
+        return $this->belongsTo(Tenant::class);
     }
 }

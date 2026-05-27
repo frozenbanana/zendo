@@ -3,6 +3,7 @@
 namespace App\Modules\Events\Models;
 
 use App\Modules\Registration\Models\Registration;
+use Database\Factories\EventInstanceFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,6 +12,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class EventInstance extends Model
 {
     use HasUuids;
+
+    protected static function newFactory()
+    {
+        return EventInstanceFactory::new();
+    }
 
     protected $fillable = [
         'event_id',

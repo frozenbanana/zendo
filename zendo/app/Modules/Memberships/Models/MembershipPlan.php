@@ -3,6 +3,7 @@
 namespace App\Modules\Memberships\Models;
 
 use App\Modules\Tenancy\Models\Concerns\HasTenantScope;
+use Database\Factories\MembershipPlanFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
@@ -10,6 +11,11 @@ class MembershipPlan extends Model
 {
     use HasTenantScope;
     use HasUuids;
+
+    protected static function newFactory()
+    {
+        return MembershipPlanFactory::new();
+    }
 
     protected $fillable = [
         'tenant_id',
