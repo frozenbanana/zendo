@@ -2,6 +2,7 @@
 
 namespace App\Modules\Events\Models;
 
+use App\Modules\Events\Enums\EventStatus;
 use App\Modules\Registration\Models\Registration;
 use App\Modules\Tenancy\Models\Concerns\HasTenantScope;
 use Database\Factories\EventFactory;
@@ -40,6 +41,7 @@ class Event extends Model
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
         'is_published' => 'boolean',
+        'status' => EventStatus::class,
     ];
 
     public function toSearchableArray(): array

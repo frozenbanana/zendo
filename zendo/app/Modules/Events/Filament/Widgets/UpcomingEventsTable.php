@@ -2,6 +2,7 @@
 
 namespace App\Modules\Events\Filament\Widgets;
 
+use App\Modules\Events\Enums\EventStatus;
 use App\Modules\Events\Models\Event;
 use Filament\Facades\Filament;
 use Filament\Tables;
@@ -20,7 +21,7 @@ class UpcomingEventsTable extends TableWidget
             ->query(
                 Event::where('tenant_id', Filament::getTenant()->id)
                     ->where('starts_at', '>=', now())
-                    ->where('status', 'published')
+                    ->where('status', EventStatus::Published)
                     ->orderBy('starts_at')
                     ->limit(5)
             )

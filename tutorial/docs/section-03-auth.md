@@ -169,6 +169,17 @@ class User extends Authenticatable
     {
         $tenantId = $tenantId ?? tenant_id();
 
+        // Fallback for Filament panels where ScopeTenant doesn't run:
+        // tenant_id() returns null because ScopeTenant skips zendo/* routes.
+        // See Section 5 "Bridge Filament Tenant Context" for details.
+        if ($tenantId === null && class_exists(\Filament\Facades\Filament::class)) {
+            $tenantId = \Filament\Facades\Filament::getTenant()?->id;
+        }
+
+        if ($tenantId === null) {
+            return null;
+        }
+
         return $this->tenantRoles()
             ->where('tenant_id', $tenantId)
             ->value('role');

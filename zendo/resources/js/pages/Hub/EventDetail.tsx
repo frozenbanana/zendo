@@ -1,4 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
+import { events } from '@/actions/App/Modules/Hub/Controllers/HubController';
+import { formatCurrency } from '@/lib/utils';
 
 interface Props {
     event: {
@@ -10,9 +12,10 @@ interface Props {
         ends_at: string | null;
         capacity: number | null;
         price_cents: number | null;
+        currency: string;
         tenant: { slug: string; name: string };
         teachers: { name: string; bio: string }[];
-        instances: { id: string; title: string; starts_at: string; ends_at: string; capacity: number | null; price_cents: number | null }[];
+        instances: { id: string; title: string; starts_at: string; ends_at: string; capacity: number | null; price_cents: number | null; currency: string }[];
     };
 }
 
@@ -27,7 +30,7 @@ export default function HubEventDetail({ event }: Props) {
 
             <div className="max-w-4xl mx-auto px-4 py-8">
                 <Link
-                    href={route('hub.events')}
+                    href={events.url()}
                     className="text-sm text-gray-500 hover:text-gray-900 mb-4 inline-block"
                 >
                     &larr; Back to all events
@@ -71,10 +74,8 @@ export default function HubEventDetail({ event }: Props) {
                                     </p>
                                 )}
                             </div>
-                            {nextInstance.price_cents != null && (
-                                <div className="text-right">
-                                    <p className="text-2xl font-bold">${(nextInstance.price_cents / 100).toFixed(2)}</p>
-                                </div>
+{nextInstance.price_cents != null && (
+                                <div className="text-right"><p className="text-2xl font-bold">{formatCurrency(nextInstance.price_cents, nextInstance.currency)}</p></div>
                             )}
                         </div>
                     </div>

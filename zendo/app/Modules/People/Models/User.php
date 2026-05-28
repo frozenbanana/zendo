@@ -2,6 +2,7 @@
 
 namespace App\Modules\People\Models;
 
+use Filament\Facades\Filament;
 use Filament\Models\Contracts\HasTenants;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -49,7 +50,9 @@ class User extends Authenticatable implements HasTenants
 
     public function roleInTenant(?string $tenantId = null): ?string
     {
-        $tenantId = $tenantId ?? tenant_id();
+        if ($tenantId === null) {
+            $tenantId = tenant_id() ?? Filament::getTenant()?->id;
+        }
 
         return $this->tenantRoles()
             ->where('tenant_id', $tenantId)

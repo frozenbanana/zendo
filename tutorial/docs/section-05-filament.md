@@ -1473,6 +1473,122 @@ If any gate returns `false`, the request is blocked. This is defense in depth.
     - ✅ Bodhi Tree's admin sees no Buildings or Membership Plans in sidebar
     - ✅ Ivy's admin sees everything
 
+## Bridge Filament Tenant Context
+
+There's a subtle but critical gap between how the app resolves tenants outside Filament vs. inside Filament panels.
+
+The `ScopeTenant` middleware resolves the tenant from the subdomain (`ivy.zendo.test`) and binds `current_tenant_id` into the app container. Every policy, scope, and helper that calls `tenant_id()` or `roleInCurrentTenant()` depends on this binding.
+
+But `ScopeTenant` explicitly **skips `zendo/*` routes** — Filament panels live under `/zendo/{tenant}` and resolve the tenant themselves via `Filament::getTenant()`. When `ScopeTenant` skips those routes, `app('current_tenant_id')` is never set. So inside Filament panels:
+
+```php
+// Anywhere inside a Filament panel request:
+tenant_id();          // → null
+app('current_tenant_id');  // → null (or throws ContainerException)
+
+// All policy checks that delegate to roleInCurrentTenant():
+$user->roleInCurrentTenant();  // → null (because tenant_id() returns null)
+$user->can('create', Event::class);  // → false for EVERYONE
+```
+
+Every role-based policy check silently returns `false`. An ADMIN sees the Events list but can't create, edit, or delete — because `roleInCurrentTenant()` returns `null`, and `in_array(null, ['admin', 'editor'])` is `false`.
+
+??? danger "This bug is invisible"
+    No error, no exception, no log entry. Policies just deny everything. An ADMIN logs in, sees the sidebar, clicks "Create Event", and gets a 403. The audit log in `Gate::before` never fires because it only fires for `GLOBAL_ADMIN` users — regular tenant admins are rejected at the policy level first.
+
+### The Fix
+
+Two changes bridge the gap:
+
+**1. Create a middleware that binds the Filament tenant into the app container.**
+
+Create `app/Modules/Tenancy/Middleware/SetFilamentTenantContext.php`:
+
+```php
+<?php
+
+namespace App\Modules\Tenancy\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Filament\Facades\Filament;
+
+class SetFilamentTenantContext
+{
+    public function handle(Request $request, Closure $next)
+    {
+        $tenant = Filament::getTenant();
+
+        if ($tenant) {
+            app()->instance('current_tenant_id', $tenant->id);
+            app()->instance(\App\Modules\Tenancy\Models\Tenant::class, $tenant);
+        }
+
+        return $next($request);
+    }
+}
+```
+
+**2. Register it in `ZendoPanelProvider`.**
+
+Update `app/Providers/Filament/ZendoPanelProvider.php` — add `SetFilamentTenantContext` to the middleware array, **after** `Authenticate`:
+
+```php
+use App\Modules\Tenancy\Middleware\SetFilamentTenantContext;
+
+// In the ->middleware([...]) call:
+->middleware([
+    EncryptCookies::class,
+    AddQueuedCookiesToResponse::class,
+    StartSession::class,
+    ShareErrorsToSession::class,
+    Authenticate::class,
+    SetFilamentTenantContext::class,   // ← After Authenticate, before Filament serves the request
+    DispatchServingNotificationView::class,
+    DisableBladeDirectives::class,
+])
+```
+
+Why **after** `Authenticate`? Because `Filament::getTenant()` needs an authenticated user to resolve the tenant. If this middleware ran before auth, `getTenant()` would return `null`.
+
+**3. Add a fallback in `User::roleInTenant()` for Filament contexts.**
+
+Even with the middleware, it's good defense-in-depth to make `roleInTenant()` resilient when `tenant_id()` returns `null`. Update the method in `app/Modules/People/Models/User.php`:
+
+```php
+use Filament\Facades\Filament;
+
+public function roleInTenant(?string $tenantId = null): ?string
+{
+    $tenantId = $tenantId ?? tenant_id();
+
+    // Fallback: if tenant_id() is null (e.g., inside Filament panels
+    // where ScopeTenant doesn't run), try Filament::getTenant()
+    if ($tenantId === null && class_exists(Filament::class)) {
+        $tenantId = Filament::getTenant()?->id;
+    }
+
+    if ($tenantId === null) {
+        return null;
+    }
+
+    return $this->tenantRoles()
+        ->where('tenant_id', $tenantId)
+        ->value('role');
+}
+```
+
+Now `roleInCurrentTenant()` (which delegates to `roleInTenant()`) works everywhere:
+
+| Context | `tenant_id()` | Fallback | Result |
+|---------|--------------|----------|--------|
+| Public subdomain (`ivy.zendo.test`) | Set by `ScopeTenant` | N/A | Works |
+| Filament panel (`/zendo/ivy/events`) | Set by `SetFilamentTenantContext` middleware | `Filament::getTenant()` | Works |
+| API or artisan command | `null` | No Filament context | Returns `null` (correct) |
+
+??? warning "Don't remove the ScopeTenant skip for zendo/* routes"
+    You might be tempted to just let `ScopeTenant` run on `/zendo/*` routes. Don't — Filament's own tenant resolution already handles the URL parsing, and running `ScopeTenant` on those routes would either double-resolve or conflict with Filament's tenant middleware. The bridge middleware is the correct approach.
+
 ---
 
 ## What's Next

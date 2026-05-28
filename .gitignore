@@ -26,3 +26,8 @@ auth.json
 .vscode/
 .zed/
 .DS_Store
+test-results/
+test-walkthrough/
+playwright.config.ts
+package.json
+package-lock.json

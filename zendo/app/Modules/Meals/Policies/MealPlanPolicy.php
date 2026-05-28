@@ -4,6 +4,7 @@ namespace App\Modules\Meals\Policies;
 
 use App\Modules\Meals\Models\MealPlan;
 use App\Modules\People\Models\User;
+use Filament\Facades\Filament;
 use Illuminate\Auth\Access\Response;
 use Laravel\Pennant\Feature;
 
@@ -11,13 +12,14 @@ class MealPlanPolicy
 {
     public function before(User $user): ?Response
     {
-        if ($user->isGlobalAdmin()) {
-            return null;
-        }
+        $tenant = Filament::getTenant() ?? $user->tenantRoles()->first()?->tenant;
 
-        $tenant = $user->tenantRoles()->first()?->tenant;
         if ($tenant && ! Feature::active('meals', $tenant)) {
             return Response::denyAsNotFound('Meals are not available for this center.');
+        }
+
+        if ($user->isGlobalAdmin()) {
+            return null;
         }
 
         return null;

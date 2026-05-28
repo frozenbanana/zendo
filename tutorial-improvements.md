@@ -40,13 +40,13 @@ The tutorial was written for Filament v3 but the app uses Filament v5. Major bre
 
 ### Policy Discrepancy
 
-The tutorial's policies use `hasPermissionTo()` which requires `spatie/laravel-permission`. The existing auth system uses role-based checks with `roleInCurrentTenant()`. Policies were adapted to use the existing role system instead.
+The tutorial's policies use `hasPermissionTo()` which requires `spatie/laravel-permission`. The existing auth system uses role-based checks with `roleInCurrentTenant()`. Policies were adapted to use the existing role system instead. Note: inside Filament panels, `roleInCurrentTenant()` delegates to `tenant_id()` which returns `null` because `ScopeTenant` skips `zendo/*` routes — see the "Filament tenant context not bridged" fix above.
 
 ### Existing Code Issues Found
 
-1. **Broken `HasTenantScope.php` at top level** - The file at `app/Modules/Tenancy/Models/HasTenantScope.php` (non-Concerns) had a syntax error (missing `{`). Removed in favor of the correct `Concerns/HasTenantScope.php`.
+1. **Broken `HasTenantScope.php` at top level** ✅ FIXED - The file at `app/Modules/Tenancy/Models/HasTenantScope.php` (non-Concerns) had a syntax error (missing `{`). Removed in favor of the correct `Concerns/HasTenantScope.php`.
 
-2. **Duplicate model files** - `HasTenantScope.php` and `HasTenantScopeThrough.php` existed both in `Models/` and `Models/Concerns/`. Removed the broken duplicates in `Models/`.
+2. **Duplicate model files** ✅ FIXED - `HasTenantScope.php` and `HasTenantScopeThrough.php` existed both in `Models/` and `Models/Concerns/`. Removed the broken duplicates in `Models/`.
 
 3. **Missing `use Date` in AppServiceProvider** - The `Date::use(CarbonImmutable::class)` call required `use Illuminate\Support\Facades\Date` which was missing.
 
@@ -57,6 +57,9 @@ The tutorial's policies use `hasPermissionTo()` which requires `spatie/laravel-p
 6. **Missing Building model** - The Room model referenced `Building::class` but no Building model existed. Created it.
 
 7. **Missing rooms table** - The Room model existed but no migration for the `rooms` table. Created one.
+8. **Filament status field must use enum values, not lowercase strings** ✅ FIXED - The tutorial's Filament EventResource uses `'draft' => 'Draft', 'published' => 'Published'` for the status select, but the seeder stores `'DRAFT'`/`'PUBLISHED'` (uppercase). Filament displays whatever the stored value is, so the badge colors and filter options break if they match against lowercase. Fix: create an `EventStatus` backed enum with `PUBLISHED` and `DRAFT` values, cast it on the model, and use `EventStatus::cases()` for Filament options and badges.
+
+9. **Filament tenant context not bridged** ✅ FIXED - `ScopeTenant` middleware skips `zendo/*` routes, so inside Filament panels the `current_tenant_id` container binding is never set. All policies that call `roleInCurrentTenant()` (which delegates to `tenant_id()`) get `null`, silently denying every action for non-GLOBAL_ADMIN users. Fixed by: (a) adding `SetFilamentTenantContext` middleware that binds `Filament::getTenant()` into the app container, registered in `ZendoPanelProvider` after `Authenticate`; (b) adding a fallback in `User::roleInTenant()` that uses `Filament::getTenant()?->id` when `tenant_id()` returns null. See Section 5 "Bridge Filament Tenant Context".
 
 ### Minor: Tutorial Inconsistencies
 
@@ -68,10 +71,22 @@ The tutorial's policies use `hasPermissionTo()` which requires `spatie/laravel-p
 ## Section 6: Inertia + React Hub
 
 1. **HubController queries Events, not EventInstances** - The tutorial queries `EventInstance` with `is_published` but EventInstance doesn't have that column. The actual implementation queries `Event` directly with `status = 'published'`.
-2. **`spots_total`/`spots_taken` don't exist** - Tutorial references these columns on EventInstance but they don't exist. Use `capacity` instead with computed availability.
-3. **`defineApple` typo** - In the SSR entry point, the tutorial has `defineApple(app)` instead of `defineApp(app)`. This has been corrected.
-4. **shadcn/ui setup is more involved** - The tutorial suggests `npx shadcn@latest init` but the actual project setup requires configuring the components path and CSS variables to match Tailwind v4.
-5. **Inertia v3 uses `@inertiajs/vite` plugin** - The tutorial's vite.config.js shows React plugin + Inertia plugin separately, but modern Inertia v3 uses `@inertiajs/vite` as the Inertia plugin in vite.config.ts.
+2. **`status` column is case-sensitive** - The seeder stores `'PUBLISHED'` (uppercase) but the tutorial queries `where('status', 'published')` (lowercase). PostgreSQL string comparisons are case-sensitive, so this returns zero results. Fix: create an `EventStatus` enum (`PUBLISHED`, `DRAFT`) and use `EventStatus::Published` everywhere — in controllers, seeders, factories, and Filament resources. The enum cast on the model ensures the value is always stored and compared consistently.
+3. **`ilike` is PostgreSQL-only** - The tutorial uses `where('title', 'ilike', ...)`, which crashes SQLite (used in tests). Fix: use `whereRaw('LOWER(title) LIKE ?', [...])` for cross-database case-insensitive search.
+4. **`spots_total`/`spots_taken` don't exist** - Tutorial references these columns on EventInstance but they don't exist. Use `capacity` instead with computed availability.
+5. **`defineApple` typo** - In the SSR entry point, the tutorial has `defineApple(app)` instead of `defineApp(app)`. This has been corrected.
+6. **shadcn/ui setup is more involved** - The tutorial suggests `npx shadcn@latest init` but the actual project setup requires configuring the components path and CSS variables to match Tailwind v4.
+7. **Inertia v3 uses `@inertiajs/vite` plugin** - The tutorial's vite.config.js shows React plugin + Inertia plugin separately, but modern Inertia v3 uses `@inertiajs/vite` as the Inertia plugin in vite.config.ts.
+8. **Inertia v3 SSR breaks with custom `setup` using `hydrateRoot`** - The tutorial shows `setup({ el, App, props }) { hydrateRoot(el, <App {...props} />) }` in `app.tsx`. In Inertia v3, SSR calls `setup({ el: null, ... })` on the server, so `hydrateRoot(null, ...)` crashes with "Target container is not a DOM element." The fix: **remove the `setup` function entirely** — Inertia v3 handles `hydrateRoot`/`createRoot` internally when no `setup` is provided. Also remove the `import { hydrateRoot } from 'react-dom/client'`.
+9. **No separate `ssr.tsx` entry point needed in Inertia v3** - The tutorial creates a separate `ssr.tsx` with `defineApp(app)` and `renderToString`. With Inertia v3's `@inertiajs/vite` plugin, SSR in dev mode is handled automatically — no separate SSR bootstrap file is needed. The `config/inertia.php` `'bundle'` option is commented out because the Vite plugin provides the SSR bundle.
+10. **Wayfinder action imports shadow Inertia prop names** - When using Wayfinder actions like `import { events } from '@/actions/...'`, the imported name `events` is shadowed by the Inertia prop `{ events }` in component destructuring. Inside the component, `events` refers to the Inertia data object (which has `.data`, `.current_page`) not the Wayfinder action (which has `.url()`). Calling `events.url()` on the Inertia prop throws `TypeError: events.url is not a function`. **Fix: rename the Wayfinder import to avoid the collision**, e.g. `import { events as eventsRoute } from '@/actions/...'`, then use `eventsRoute.url()` inside the component. ✅ FIXED
+11. **Currency hardcoded as `$` (USD)** - The tutorial shows `€{event.price_cents / 100}` with a hardcoded Euro symbol, but the actual app has multi-currency tenants (EUR, THB). The Hub pages always displayed `$` regardless of tenant currency. **Fix: create a `formatCurrency(cents, currency)` utility that maps currency codes to symbols, and pass `currency` from the tenant through HubController to all Inertia views.** ✅ FIXED
+12. **Feature flags not serialized for Inertia** - The `FeatureFlags` value object has a `private array $flags` property but does not implement `JsonSerializable` or `Arrayable`. When Inertia serializes the Tenant model, `json_encode(new FeatureFlags(...))` produces `{}` because private properties aren't visible. **Fix: implement `JsonSerializable` and `Arrayable` on `FeatureFlags`, returning `$this->flags` from both methods.** ✅ FIXED
+13. **Feature-gated Filament resources bypassable via direct URL** - The policy `before()` methods checked feature flags only for non-admin users, allowing global admins to bypass feature restrictions. Also, `Filament::getTenant()` was not used in policies — instead `$user->tenantRoles()->first()?->tenant` was used which may not match the current Filament tenant. **Fix: check feature flags before the admin bypass in all three policies, and use `Filament::getTenant()` instead of the user's first tenant.** ✅ FIXED
+14. **Filament tenant context not bridged for role checks** - The `ScopeTenant` middleware skips `zendo/*` routes, so `tenant_id()` returns `null` inside Filament panels. All policy methods using `roleInCurrentTenant()` silently fail (returning `null`). VIEWER users can see Create buttons because `null === 'ADMIN'` is `false` and `null === 'EDITOR'` is `false`, but `null !== null` (the `viewAny` check) is also `false`. **Fix: (a) add `SetFilamentTenantContext` middleware that binds `Filament::getTenant()` into the app container; (b) update `User::roleInTenant()` to fall back to `Filament::getTenant()?->id` when `tenant_id()` is null.** ✅ FIXED
+15. **CenterList page missing feature badges** - The tutorial's centers page doesn't show feature badges indicating which features (meals, lodging, memberships) each center offers. The HubController's `centers()` method didn't pass properly serialized features, and the CenterList component didn't display them. **Fix: update HubController to map features via `featureFlags()->toArray()`, and add feature badges to CenterList.tsx matching Home.tsx.** ✅ FIXED
+16. **Welcome page uses default Laravel branding** - The default Breeze/Inertia welcome page shows Laravel branding and no Zendo content. **Fix: replace `welcome.tsx` with a Zendo-branded landing page linking to `/hub` and `/hub/events`.** ✅ FIXED
+17. **`App\Models\User` does not exist** - `ResetUserPassword.php` and `TenantScopingTest.php` imported `App\Models\User` but the actual model is at `App\Modules\People\Models\User`. **Fix: update both imports.** ✅ FIXED
 
 ## Section 7: Events, Queues & Realtime
 
@@ -137,9 +152,10 @@ The tutorial's policies use `hasPermissionTo()` which requires `spatie/laravel-p
 
 1. **`php artisan serve` returns 500 until multiple fixes applied** - The app as committed in section 8 doesn't boot. Required: fix `config()` in bootstrap, fix `tenant()` helper, fix `ScopeTenant` middleware, remove Socialite routes, register API routes, add factory overrides.
 2. **Frontend must be built before Inertia pages render** - Running `php artisan serve` without `npm run build` results in "Unable to locate file in Vite manifest" errors for all Inertia-rendered pages.
-3. **Test database is SQLite (in-memory)** but production is PostgreSQL. Any PostgreSQL-specific features (RLS, `SET` statements, `ilike`) must be guarded or tests will fail.
-4. **`App\Models\User` does not exist** - All Fortify action files (`CreateNewUser`, `UpdateUserPassword`, `UpdateUserProfileInformation`) import `App\Models\User` but the actual model is at `App\Modules\People\Models\User`. The `config/auth.php` correctly points to the module location, but the action files will crash at runtime.
-5. **`DatabaseSeeder` uses `App\Models\User`** - Same issue as above. Must be changed to `App\Modules\People\Models\User`.
+3. **Test database is SQLite (in-memory)** but production is PostgreSQL. Any PostgreSQL-specific features (RLS, `SET` statements, `ilike`) must be guarded or tests will fail. The `EventStatus` enum pattern (storing uppercase values like `PUBLISHED` but referencing them via `EventStatus::Published`) prevents case-sensitivity bugs that are invisible in production (PostgreSQL) but easy to introduce when the seeder uses `'PUBLISHED'` and the controller uses `'published'`.
+4. **`App\Models\User` does not exist** ✅ FIXED - All Fortify action files (`CreateNewUser`, `UpdateUserPassword`, `UpdateUserProfileInformation`) import `App\Models\User` but the actual model is at `App\Modules\People\Models\User`. The `config/auth.php` correctly points to the module location, but the action files will crash at runtime.
+
+5. **`DatabaseSeeder` uses `App\Models\User`** ✅ FIXED - Same issue as above. Must be changed to `App\Modules\People\Models\User`.
 6. **`SCOUT_DRIVER` must be `null` in `.env` for local dev** - Without Meilisearch running, any model using the `Searchable` trait (Tenant, Event, Teacher) will crash with "Please install the suggested Meilisearch client." Set `SCOUT_DRIVER=null` in `.env`.
 7. **TenantSeeder missing from original tutorial** - The `TenantFeatureSeeder` calls `firstOrFail()` on tenants that don't exist yet. A separate `TenantSeeder` must create the tenant records first.
 8. **`firstOrCreate` with tenant-scoped models doesn't work in seeders** - Models using `HasTenantScope` or `HasTenantScopeThrough` have global scopes that interfere with `firstOrCreate()`. The DemoDataSeeder must set `app()->instance('current_tenant_id', ...)` before creating tenant-scoped records, or the scope will add `WHERE tenant_id IS NULL`.

@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Modules\Tenancy\Models\Tenant;
 use App\Modules\Tenancy\Models\FeatureFlags;
+use App\Modules\Tenancy\Models\Tenant;
+use Illuminate\Database\Seeder;
 
 class TenantFeatureSeeder extends Seeder
 {

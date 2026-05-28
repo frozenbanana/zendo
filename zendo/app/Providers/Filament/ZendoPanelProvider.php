@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Modules\Tenancy\Middleware\SetFilamentTenantContext;
 use App\Modules\Tenancy\Models\Tenant;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -53,6 +54,7 @@ class ZendoPanelProvider extends PanelProvider
                 StartSession::class,
                 ShareErrorsFromSession::class,
                 Authenticate::class,
+                SetFilamentTenantContext::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ]);

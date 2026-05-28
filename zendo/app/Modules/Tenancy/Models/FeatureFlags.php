@@ -2,7 +2,9 @@
 
 namespace App\Modules\Tenancy\Models;
 
-class FeatureFlags
+use Illuminate\Contracts\Support\Arrayable;
+
+class FeatureFlags implements \JsonSerializable, Arrayable
 {
     private const VALID_FLAGS = [
         'meals',
@@ -58,6 +60,11 @@ class FeatureFlags
     }
 
     public function toArray(): array
+    {
+        return $this->flags;
+    }
+
+    public function jsonSerialize(): mixed
     {
         return $this->flags;
     }

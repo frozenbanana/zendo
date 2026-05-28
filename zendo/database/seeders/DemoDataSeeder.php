@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Modules\Events\Enums\EventStatus;
 use App\Modules\Events\Models\Category;
 use App\Modules\Events\Models\Event;
 use App\Modules\Events\Models\EventInstance;
@@ -191,7 +192,7 @@ class DemoDataSeeder extends Seeder
         $this->createEvent($ivy, [
             'title' => 'Morning Vinyasa Flow',
             'description' => 'Start your day with an energizing vinyasa flow. Suitable for all levels, this class focuses on breath-synchronized movement to build heat and flexibility.',
-            'status' => 'PUBLISHED',
+            'status' => EventStatus::Published->value,
             'starts_at' => now()->addDays(14)->setTime(7, 0),
             'ends_at' => now()->addDays(14)->setTime(8, 30),
             'capacity' => 30,
@@ -206,7 +207,7 @@ class DemoDataSeeder extends Seeder
         $this->createEvent($ivy, [
             'title' => 'Silent Retreat Weekend',
             'description' => 'A transformative 3-day silent retreat. Through guided and self-directed meditation, discover the profound stillness that lies beneath the noise. All meals included.',
-            'status' => 'PUBLISHED',
+            'status' => EventStatus::Published->value,
             'starts_at' => now()->addMonths(1)->setTime(16, 0),
             'ends_at' => now()->addMonths(1)->addDays(2)->setTime(14, 0),
             'capacity' => 20,
@@ -220,7 +221,7 @@ class DemoDataSeeder extends Seeder
         $this->createEvent($ivy, [
             'title' => 'Yin Yoga & Sound Healing',
             'description' => 'An evening of deep relaxation combining gentle yin yoga with the healing vibrations of singing bowls and gongs. No experience needed.',
-            'status' => 'PUBLISHED',
+            'status' => EventStatus::Published->value,
             'starts_at' => now()->addDays(7)->setTime(19, 0),
             'ends_at' => now()->addDays(7)->setTime(21, 0),
             'capacity' => 40,
@@ -231,7 +232,7 @@ class DemoDataSeeder extends Seeder
         $this->createEvent($ivy, [
             'title' => 'Mindfulness-Based Stress Reduction (MBSR)',
             'description' => 'An 8-week evidence-based program teaching mindfulness meditation and gentle yoga for stress management.',
-            'status' => 'PUBLISHED',
+            'status' => EventStatus::Published->value,
             'starts_at' => now()->addDays(10)->setTime(18, 0),
             'ends_at' => now()->addDays(10)->setTime(20, 0),
             'capacity' => 25,
@@ -242,7 +243,7 @@ class DemoDataSeeder extends Seeder
         $this->createEvent($ivy, [
             'title' => 'Trauma-Informed Yoga Series',
             'description' => 'A 6-week gentle yoga series designed for those healing from trauma. Led by a certified trauma-informed instructor.',
-            'status' => 'DRAFT',
+            'status' => EventStatus::Draft->value,
             'starts_at' => now()->addMonths(2)->setTime(10, 0),
             'ends_at' => now()->addMonths(2)->setTime(11, 30),
             'capacity' => 12,
@@ -283,7 +284,7 @@ class DemoDataSeeder extends Seeder
         $this->createEvent($nalanda, [
             'title' => 'Philosophy of Mind',
             'description' => 'Explore Buddhist philosophy through Socratic dialogue and guided meditation. No prior experience needed — just curiosity and an open mind.',
-            'status' => 'PUBLISHED',
+            'status' => EventStatus::Published->value,
             'starts_at' => now()->addDays(5)->setTime(19, 0),
             'ends_at' => now()->addDays(5)->setTime(21, 30),
             'capacity' => 50,
@@ -294,7 +295,7 @@ class DemoDataSeeder extends Seeder
         $this->createEvent($nalanda, [
             'title' => 'Zen Meditation Intensive',
             'description' => 'A full-day zen meditation intensive with periods of sitting and walking meditation, dharma talks, and individual interviews with the teacher.',
-            'status' => 'PUBLISHED',
+            'status' => EventStatus::Published->value,
             'starts_at' => now()->addDays(20)->setTime(9, 0),
             'ends_at' => now()->addDays(20)->setTime(17, 0),
             'capacity' => 30,
@@ -305,7 +306,7 @@ class DemoDataSeeder extends Seeder
         $this->createEvent($nalanda, [
             'title' => 'Mindful Leadership Workshop',
             'description' => 'A weekend workshop integrating mindfulness practices with leadership development. For managers, executives, and anyone seeking to lead with awareness.',
-            'status' => 'PUBLISHED',
+            'status' => EventStatus::Published->value,
             'starts_at' => now()->addMonths(2)->setTime(10, 0),
             'ends_at' => now()->addMonths(2)->addDays(1)->setTime(17, 0),
             'capacity' => 24,
@@ -332,7 +333,7 @@ class DemoDataSeeder extends Seeder
         $this->createEvent($bodhi, [
             'title' => 'Sound Healing & Breathwork Journey',
             'description' => 'A profound 2-hour journey through sound and breath. Using gongs, singing bowls, and pranayama techniques, you will release stored tension and access deep states of relaxation.',
-            'status' => 'PUBLISHED',
+            'status' => EventStatus::Published->value,
             'starts_at' => now()->addDays(3)->setTime(18, 0),
             'ends_at' => now()->addDays(3)->setTime(20, 0),
             'capacity' => 25,
@@ -343,7 +344,7 @@ class DemoDataSeeder extends Seeder
         $this->createEvent($bodhi, [
             'title' => 'Thai Cooking & Meditation Retreat',
             'description' => 'Three days of meditation, Thai cooking classes, and cultural immersion. Learn to cook authentic Thai dishes while cultivating mindfulness in every moment.',
-            'status' => 'PUBLISHED',
+            'status' => EventStatus::Published->value,
             'starts_at' => now()->addMonths(1)->setTime(14, 0),
             'ends_at' => now()->addMonths(1)->addDays(2)->setTime(12, 0),
             'capacity' => 15,

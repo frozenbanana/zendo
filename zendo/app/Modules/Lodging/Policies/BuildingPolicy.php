@@ -4,6 +4,7 @@ namespace App\Modules\Lodging\Policies;
 
 use App\Modules\Lodging\Models\Building;
 use App\Modules\People\Models\User;
+use Filament\Facades\Filament;
 use Illuminate\Auth\Access\Response;
 use Laravel\Pennant\Feature;
 
@@ -11,13 +12,14 @@ class BuildingPolicy
 {
     public function before(User $user): ?Response
     {
-        if ($user->isGlobalAdmin()) {
-            return null;
-        }
+        $tenant = Filament::getTenant() ?? $user->tenantRoles()->first()?->tenant;
 
-        $tenant = $user->tenantRoles()->first()?->tenant;
         if ($tenant && ! Feature::active('lodging', $tenant)) {
             return Response::denyAsNotFound('Lodging is not available for this center.');
+        }
+
+        if ($user->isGlobalAdmin()) {
+            return null;
         }
 
         return null;

@@ -1,21 +1,23 @@
 import { Head, Link, router } from '@inertiajs/react';
+import { events as eventsRoute, eventDetail } from '@/actions/App/Modules/Hub/Controllers/HubController';
+import { formatCurrency } from '@/lib/utils';
 
 interface Props {
-    events: { data: { id: string; title: string; description: string; starts_at: string; ends_at: string; price_cents: number | null; capacity: number | null; tenant: { slug: string; name: string }; teachers: { name: string }[] }[]; current_page: number; last_page: number };
+    events: { data: { id: string; title: string; description: string; starts_at: string; ends_at: string; price_cents: number | null; currency: string; capacity: number | null; tenant: { slug: string; name: string }; teachers: { name: string }[] }[]; current_page: number; last_page: number };
     centers: { slug: string; name: string }[];
     filters: { search: string; center: string };
 }
 
 export default function HubEvents({ events, centers, filters }: Props) {
     const handleSearch = (search: string) => {
-        router.get(route('hub.events'), { search, center: filters.center }, {
+        router.get(eventsRoute.url(), { search, center: filters.center }, {
             preserveState: true,
             preserveScroll: true,
         });
     };
 
     const handleCenterFilter = (center: string) => {
-        router.get(route('hub.events'), { search: filters.search, center }, {
+        router.get(eventsRoute.url(), { search: filters.search, center }, {
             preserveState: true,
             preserveScroll: true,
         });
@@ -74,7 +76,7 @@ export default function HubEvents({ events, centers, filters }: Props) {
                                 )}
                             </div>
                             <h3 className="text-lg font-semibold">
-                                <Link href={route('hub.events.show', { id: event.id })}>
+                                <Link href={eventDetail.url({ id: event.id })}>
                                     {event.title}
                                 </Link>
                             </h3>
@@ -93,7 +95,7 @@ export default function HubEvents({ events, centers, filters }: Props) {
                                 </span>
                                 {event.price_cents != null && (
                                     <span className="font-semibold">
-                                        ${(event.price_cents / 100).toFixed(2)}
+                                        {formatCurrency(event.price_cents, event.currency)}
                                     </span>
                                 )}
                             </div>
@@ -117,7 +119,7 @@ export default function HubEvents({ events, centers, filters }: Props) {
                                 key={page}
                                 className={`px-3 py-1 text-sm rounded-md ${page === events.current_page ? 'bg-indigo-600 text-white' : 'border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
                                 onClick={() =>
-                                    router.get(route('hub.events'), {
+                                    router.get(eventsRoute.url(), {
                                         page,
                                         search: filters.search,
                                         center: filters.center,

@@ -247,6 +247,7 @@ Create `app/Modules/Hub/Controllers/HubController.php`:
 
 namespace App\Modules\Hub\Controllers;
 
+use App\Modules\Events\Enums\EventStatus;
 use App\Modules\Tenancy\Models\Tenant;
 use App\Modules\Events\Models\Event;
 use App\Modules\Events\Models\EventInstance;
@@ -263,7 +264,7 @@ class HubController
             ->get();
 
         $featuredEvents = Event::with(['tenant', 'teachers'])
-            ->where('status', 'published')
+            ->where('status', EventStatus::Published)
             ->where('starts_at', '>', now())
             ->orderBy('starts_at')
             ->limit(6)
@@ -290,13 +291,14 @@ class HubController
     public function events(Request $request)
     {
         $query = Event::with(['tenant', 'teachers'])
-            ->where('status', 'published')
+            ->where('status', EventStatus::Published)
             ->where('starts_at', '>', now());
 
         if ($search = $request->input('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'ilike', "%{$search}%")
-                  ->orWhere('description', 'ilike', "%{$search}%");
+            $lowerSearch = strtolower($search);
+            $query->where(function ($q) use ($lowerSearch) {
+                $q->whereRaw('LOWER(title) LIKE ?', ["%{$lowerSearch}%"])
+                  ->orWhereRaw('LOWER(description) LIKE ?', ["%{$lowerSearch}%"]);
             });
         }
 
@@ -403,6 +405,28 @@ Add Wayfinder to your build pipeline by editing `package.json` scripts:
 ## Step 8: Create the Event Listing Page
 
 Now the fun part — building the actual React page. Create `resources/js/Pages/Hub/Events.tsx`:
+
+!!! warning "Avoid naming collisions between Wayfinder actions and Inertia props"
+    When importing Wayfinder actions, be careful not to use names that collide with Inertia prop names. For example, if your controller passes an `events` prop and you also import `{ events }` from Wayfinder, the Inertia prop will shadow the import inside the component. Calling `events.url()` on the Inertia data object throws `TypeError: events.url is not a function`.
+
+    **Fix: rename the Wayfinder import to avoid the collision:**
+
+    ```tsx
+    // ❌ BAD — 'events' prop shadows the Wayfinder import
+    import { events, eventDetail } from '@/actions/App/Modules/Hub/Controllers/HubController';
+    export default function HubEvents({ events, centers, filters }: Props) {
+        // Inside here, 'events' is the Inertia prop, not the Wayfinder action!
+        router.get(events.url(), ...); // TypeError!
+    }
+
+    // ✅ GOOD — rename the Wayfinder import
+    import { events as eventsRoute, eventDetail } from '@/actions/App/Modules/Hub/Controllers/HubController';
+    export default function HubEvents({ events, centers, filters }: Props) {
+        router.get(eventsRoute.url(), ...); // Works correctly
+    }
+    ```
+
+    This applies to any Wayfinder action whose name matches an Inertia prop: `events`, `centers`, `teachers`, etc.
 
 ```tsx
 import { Head, Link } from '@inertiajs/react';
@@ -722,7 +746,7 @@ And add the controller method:
 public function eventDetail(string $id)
 {
     $event = Event::with(['tenant', 'teachers'])
-        ->where('status', 'published')
+        ->where('status', EventStatus::Published)
         ->where('id', $id)
         ->firstOrFail();
 

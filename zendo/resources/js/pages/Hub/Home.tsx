@@ -1,9 +1,9 @@
 import { Head, Link } from '@inertiajs/react';
-import { router } from '@inertiajs/react';
+import { formatCurrency } from '@/lib/utils';
 
 interface Props {
-    centers: { id: string; slug: string; name: string; description: string; logo: string | null; features: Record<string, boolean> }[];
-    featuredEvents: { id: string; title: string; description: string; slug: string; starts_at: string; tenant: { slug: string; name: string }; teachers: { name: string }[] }[];
+    centers: { id: string; slug: string; name: string; description: string; logo: string | null; features: Record<string, boolean>; currency: string }[];
+    featuredEvents: { id: string; title: string; description: string; slug: string; starts_at: string; price_cents: number | null; currency: string; tenant: { slug: string; name: string }; teachers: { name: string }[] }[];
 }
 
 export default function HubHome({ centers, featuredEvents }: Props) {
@@ -54,6 +54,9 @@ export default function HubHome({ centers, featuredEvents }: Props) {
                                     </div>
                                     <h3 className="text-lg font-semibold">{event.title}</h3>
                                     <p className="text-sm text-gray-500 mt-1">{new Date(event.starts_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                    {event.price_cents != null && (
+                                        <p className="text-sm font-semibold mt-1">{formatCurrency(event.price_cents, event.currency)}</p>
+                                    )}
                                 </div>
                             ))}
                         </div>

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Events\Filament;
 
+use App\Modules\Events\Enums\EventStatus;
 use App\Modules\Events\Filament\EventResource\Pages;
 use App\Modules\Events\Filament\EventResource\RelationManagers;
 use App\Modules\Events\Models\Event;
@@ -41,13 +42,9 @@ class EventResource extends Resource
                             ->columnSpanFull(),
 
                         Components\Select::make('status')
-                            ->options([
-                                'draft' => 'Draft',
-                                'published' => 'Published',
-                                'archived' => 'Archived',
-                            ])
+                            ->options(array_column(EventStatus::cases(), 'value', 'value'))
                             ->required()
-                            ->default('draft'),
+                            ->default(EventStatus::Draft->value),
 
                         Components\DateTimePicker::make('starts_at')
                             ->required(),
@@ -95,9 +92,8 @@ class EventResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
-                        'draft' => 'gray',
-                        'published' => 'success',
-                        'archived' => 'danger',
+                        EventStatus::Draft->value => 'gray',
+                        EventStatus::Published->value => 'success',
                         default => 'gray',
                     }),
 
@@ -120,11 +116,7 @@ class EventResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('status')
-                    ->options([
-                        'draft' => 'Draft',
-                        'published' => 'Published',
-                        'archived' => 'Archived',
-                    ]),
+                    ->options(array_column(EventStatus::cases(), 'value', 'value')),
 
                 TernaryFilter::make('has_capacity')
                     ->label('Has capacity')

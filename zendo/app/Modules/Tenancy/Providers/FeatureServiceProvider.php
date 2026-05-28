@@ -2,9 +2,9 @@
 
 namespace App\Modules\Tenancy\Providers;
 
+use App\Modules\Tenancy\Models\Tenant;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Pennant\Feature;
-use App\Modules\Tenancy\Models\Tenant;
 
 class FeatureServiceProvider extends ServiceProvider
 {
