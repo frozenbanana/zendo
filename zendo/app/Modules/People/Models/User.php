@@ -2,6 +2,7 @@
 
 namespace App\Modules\People\Models;
 
+use Database\Factories\UserFactory;
 use Filament\Facades\Filament;
 use Filament\Models\Contracts\HasTenants;
 use Filament\Panel;
@@ -83,5 +84,10 @@ class User extends Authenticatable implements HasTenants
     {
         return $this->tenantRoles()->where('tenant_id', $tenant->id)->exists()
             || $this->isGlobalAdmin();
+    }
+
+    protected static function newFactory()
+    {
+        return UserFactory::new();
     }
 }

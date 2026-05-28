@@ -2,6 +2,10 @@
 
 namespace App\Modules\Registration\Http\Controllers;
 
+use App\Modules\Events\Enums\EventStatus;
+use App\Modules\Events\Models\EventInstance;
+use App\Modules\Lodging\Models\Room;
+use App\Modules\Meals\Models\MealPlan;
 use App\Modules\Registration\Http\Requests\CreateRegistrationRequest;
 use App\Modules\Registration\Models\Registration;
 use App\Modules\Registration\Services\RegistrationService;
@@ -19,22 +23,74 @@ class RegistrationController
 
         $steps = ['event', 'guest-info'];
 
-        if ($tenant && $tenant->featureFlags()->lodging()) {
+        $hasLodging = $tenant && $tenant->featureFlags()->lodging();
+        $hasMeals = $tenant && $tenant->featureFlags()->meals();
+
+        if ($hasLodging) {
             $steps[] = 'lodging';
         }
 
-        if ($tenant && $tenant->featureFlags()->meals()) {
+        if ($hasMeals) {
             $steps[] = 'meals';
         }
 
         $steps[] = 'review';
 
+        $eventInstances = EventInstance::with('event')
+            ->whereHas('event', fn ($q) => $q->where('status', EventStatus::Published))
+            ->where('starts_at', '>', now())
+            ->orderBy('starts_at')
+            ->limit(20)
+            ->get()
+            ->map(fn ($i) => [
+                'id' => $i->id,
+                'title' => $i->title,
+                'starts_at' => $i->starts_at->toIso8601String(),
+                'ends_at' => $i->ends_at?->toIso8601String(),
+                'capacity' => $i->capacity,
+                'price_cents' => $i->price_override_cents ?? $i->event->price_cents,
+                'currency' => $tenant?->currency ?? 'USD',
+                'event_name' => $i->event->title,
+            ]);
+
+        $rooms = $hasLodging && $tenant
+            ? Room::with('building')
+                ->whereHas('building', fn ($q) => $q->where('tenant_id', $tenant->id))
+                ->get()
+                ->map(fn ($r) => [
+                    'id' => $r->id,
+                    'name' => $r->name,
+                    'room_type' => $r->room_type,
+                    'capacity' => $r->capacity,
+                    'price_cents' => $r->price_cents ?? 0,
+                    'currency' => $tenant->currency ?? 'USD',
+                    'building_name' => $r->building?->name,
+                ])
+            : [];
+
+        $mealPlans = $hasMeals && $tenant
+            ? MealPlan::where('tenant_id', $tenant->id)
+                ->where('is_available', true)
+                ->get()
+                ->map(fn ($m) => [
+                    'id' => $m->id,
+                    'name' => $m->name,
+                    'description' => $m->description,
+                    'meal_type' => $m->meal_type ?? 'standard',
+                    'price_cents' => $m->price_cents,
+                    'currency' => $tenant->currency ?? 'USD',
+                ])
+            : [];
+
         return Inertia::render('Registration/Wizard', [
             'steps' => $steps,
             'features' => [
-                'lodging' => $tenant?->featureFlags()->lodging() ?? false,
-                'meals' => $tenant?->featureFlags()->meals() ?? false,
+                'lodging' => $hasLodging,
+                'meals' => $hasMeals,
             ],
+            'eventInstances' => $eventInstances,
+            'rooms' => $rooms,
+            'mealPlans' => $mealPlans,
         ]);
     }
 

@@ -99,7 +99,7 @@ The tutorial's policies use `hasPermissionTo()` which requires `spatie/laravel-p
 1. **Registration migration already existed** from a prior section with different columns. We added a migration to add `event_instance_id`, `guest_first_name`, `guest_last_name`, `guest_email`, `guest_phone` rather than recreating the table.
 2. **`AddOnSelection` doesn't have a separate `AddOn` model** - The tutorial references `add_on_id` FK but add-ons are simpler as inline type+name fields. We use `add_on_type` + `add_on_name` instead.
 3. **`RoomType` model doesn't exist** - The tutorial's Stay references `room_type_id` FK to a `RoomType` model, but our schema has rooms with a `room_type` string column. Stay uses `room_type` string instead of FK.
-4. **Zustand store creation**, React wizard components, and `CreateRegistrationRequest` server-side validation are implemented but the React pages need the full wizard UI.
+4. **Zustand store creation**, React wizard components, and `CreateRegistrationRequest` server-side validation are implemented but the React pages need the full wizard UI. ✅ FIXED - Created `Registration/Wizard.tsx` and `Registration/Show.tsx` with full multi-step wizard UI. The controller was updated to pass `eventInstances`, `rooms`, and `mealPlans` as Inertia props instead of requiring separate API fetch calls.
 
 ## Section 9: Payments with Stripe
 
@@ -136,7 +136,7 @@ The tutorial's policies use `hasPermissionTo()` which requires `spatie/laravel-p
 
 ## Section 13: Hardening & Security
 
-1. **RLS (Row-Level Security) not yet implemented in migrations** - The tutorial describes creating an RLS migration with `tenant_isolation` and `super_admin_all` policies, but this is Section 13's content. The POC has the `ScopeTenant` middleware setting `SET app.current_tenant_id` but no actual RLS policies.
+1. **RLS (Row-Level Security) not yet implemented in migrations** ✅ FIXED - Created migration `add_row_level_security_policies` that enables RLS on all tenant-scoped tables and creates `tenant_isolation` and `super_admin_all` policies. Guarded with `config('database.default') === 'pgsql'` so it's no-op on SQLite.
 2. **Rate limiting uses `RateLimiter::for()`** in AppServiceProvider - Verified to work with Laravel's built-in throttling.
 3. **API versioning uses `/api/v1/` prefix** - Routes defined in `routes/api.php`.
 
@@ -156,8 +156,8 @@ The tutorial's policies use `hasPermissionTo()` which requires `spatie/laravel-p
 4. **`App\Models\User` does not exist** ✅ FIXED - All Fortify action files (`CreateNewUser`, `UpdateUserPassword`, `UpdateUserProfileInformation`) import `App\Models\User` but the actual model is at `App\Modules\People\Models\User`. The `config/auth.php` correctly points to the module location, but the action files will crash at runtime.
 
 5. **`DatabaseSeeder` uses `App\Models\User`** ✅ FIXED - Same issue as above. Must be changed to `App\Modules\People\Models\User`.
-6. **`SCOUT_DRIVER` must be `null` in `.env` for local dev** - Without Meilisearch running, any model using the `Searchable` trait (Tenant, Event, Teacher) will crash with "Please install the suggested Meilisearch client." Set `SCOUT_DRIVER=null` in `.env`.
+6. **`SCOUT_DRIVER` must be `null` in `.env` for local dev** ✅ FIXED - Changed `.env.example` from `SCOUT_DRIVER=meilisearch` to `SCOUT_DRIVER=null`. Without Meilisearch running, any model using the `Searchable` trait will crash. Set `SCOUT_DRIVER=null` in `.env` for local dev.
 7. **TenantSeeder missing from original tutorial** - The `TenantFeatureSeeder` calls `firstOrFail()` on tenants that don't exist yet. A separate `TenantSeeder` must create the tenant records first.
 8. **`firstOrCreate` with tenant-scoped models doesn't work in seeders** - Models using `HasTenantScope` or `HasTenantScopeThrough` have global scopes that interfere with `firstOrCreate()`. The DemoDataSeeder must set `app()->instance('current_tenant_id', ...)` before creating tenant-scoped records, or the scope will add `WHERE tenant_id IS NULL`.
-9. **Models in `App\Modules\*` namespace need explicit `newFactory()`** - Every model using `HasFactory` in `App\Modules\*` namespace must override `newFactory()` to point to `Database\Factories\*Factory`. Without this, Laravel tries to resolve to the wrong namespace convention.
+9. **Models in `App\Modules\*` namespace need explicit `newFactory()`** ✅ FIXED - All models using `HasFactory` in `App\Modules\*` namespace now override `newFactory()` to point to `Database\Factories\*Factory`. The `User` model was the last one fixed.
 10. **No demo data seeders provided** - The tutorial creates data manually via `tinker` but never provides a `DemoDataSeeder`. This makes it hard to get a feel for the app. A comprehensive seeder should create: 3 tenants with different feature flags, users with cross-tenant roles, events with instances, teachers, categories, buildings with rooms, meal plans, and membership plans.

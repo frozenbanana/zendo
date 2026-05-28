@@ -79,7 +79,18 @@ export default function HubEventDetail({ event }: Props) {
                             )}
                         </div>
                     </div>
+)}
+                    </div>
                 )}
+
+                <div className="mt-8">
+                    <Link
+                        href="/registrations/create"
+                        className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                    >
+                        Register for this event
+                    </Link>
+                </div>
             </div>
         </>
     );
