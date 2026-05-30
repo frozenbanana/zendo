@@ -99,7 +99,7 @@ class ScopeTenant
         app()->instance(Tenant::class, $tenant);
 
         if (config('database.default') === 'pgsql') {
-            DB::statement("SET app.current_tenant_id = '{$tenant->id}'");
+            DB::statement('SET app.current_tenant_id = ?', [$tenant->id]);
         }
     }
 }

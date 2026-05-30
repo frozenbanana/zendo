@@ -146,7 +146,7 @@ return [
                 'searchableAttributes' => ['title', 'description'],
             ],
             'teachers' => [
-                'filterableAttributes' => ['specialties'],
+                'filterableAttributes' => ['tenant_id', 'specialties'],
                 'searchableAttributes' => ['name', 'bio', 'email'],
             ],
             'tenants' => [
